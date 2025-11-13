@@ -85,5 +85,5 @@ Contributions are welcome! Please follow these steps:
 
 ## Screenshots
 
-![Dashboard](Landingpage.jpg)
+![Dashboard](Landingpage.jpg,Dashboard.jpg)
 *Dashboard and analytics view*
