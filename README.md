@@ -85,5 +85,5 @@ Contributions are welcome! Please follow these steps:
 
 ## Screenshots
 
-![Dashboard](PhishNet-Logo.png)
+![Dashboard]()
 *Dashboard and analytics view*
