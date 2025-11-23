@@ -8,7 +8,7 @@
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
   
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -71,6 +71,26 @@
         grid-template-columns: 1fr;
       }
     }
+
+    @media (max-width: 699px) {
+      .dashboard-layout {
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+      }
+
+      table {
+        font-size: 0.875rem;
+      }
+
+      table th,
+      table td {
+        padding: 0.75rem 0.5rem;
+      }
+
+      table th {
+        font-size: 0.75rem;
+      }
+    }
   </style>
 </head>
 <body>
@@ -78,11 +98,8 @@
 
   <header>
     <div class="header-container">
-      <a href="index.html" class="logo">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-        PhishNet
+      <a href="index.html" class="brand-logo">
+        <span class="logo-text">PhishNet</span>
       </a>
 
       <nav>
@@ -168,25 +185,65 @@
           <!-- Left Sidebar -->
           <div>
             <!-- Recent Alerts -->
-            <div class="card" style="margin-bottom: 2rem;">
-              <div class="card-header">
-                <h3 class="card-title">Recent Alerts</h3>
+            <div class="recent-alerts-container" style="margin-bottom: 2rem;">
+              <div class="recent-alerts-header">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0B63D9" stroke-width="2">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                <h3>Recent Alerts</h3>
               </div>
-              <div style="padding-top: 1rem;">
-                <div class="alert-item">
-                  <h4 style="color: white;">Phishing Email Detected</h4>
-                  <p>From: security@paypa1-verify.com</p>
-                  <p style="font-size: 0.625rem;">2 hours ago</p>
+              <div>
+                <div class="alert-item-enhanced">
+                  <div class="alert-item-header">
+                    <div class="alert-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                      </svg>
+                    </div>
+                    <div class="alert-content">
+                      <h4 class="alert-title">Phishing Email Detected</h4>
+                      <p class="alert-description">From: security@paypa1-verify.com</p>
+                      <span class="alert-type-badge alert-type-malicious">Malicious</span>
+                      <p class="alert-time">2 hours ago</p>
+                    </div>
+                  </div>
                 </div>
-                <div class="alert-item">
-                  <h4 style="color: white;">Suspicious URL Blocked</h4>
-                  <p>secure-banking-login.tk</p>
-                  <p style="font-size: 0.625rem;">5 hours ago</p>
+                <div class="alert-item-enhanced">
+                  <div class="alert-item-header">
+                    <div class="alert-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                      </svg>
+                    </div>
+                    <div class="alert-content">
+                      <h4 class="alert-title">Suspicious URL Blocked</h4>
+                      <p class="alert-description">secure-banking-login.tk</p>
+                      <span class="alert-type-badge alert-type-suspicious">Suspicious</span>
+                      <p class="alert-time">5 hours ago</p>
+                    </div>
+                  </div>
                 </div>
-                <div class="alert-item">
-                  <h4 style="color: white;">Malicious Link Found</h4>
-                  <p>From: update@amaz0n-account.ru</p>
-                  <p style="font-size: 0.625rem;">1 day ago</p>
+                <div class="alert-item-enhanced">
+                  <div class="alert-item-header">
+                    <div class="alert-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                      </svg>
+                    </div>
+                    <div class="alert-content">
+                      <h4 class="alert-title">Malicious Link Found</h4>
+                      <p class="alert-description">From: update@amaz0n-account.ru</p>
+                      <span class="alert-type-badge alert-type-malicious">Malicious</span>
+                      <p class="alert-time">1 day ago</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
