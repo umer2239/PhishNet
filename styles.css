@@ -47,6 +47,13 @@
   /* Animations */
   --transition-speed: 0.3s;
   --animation-duration: 0.6s;
+
+  /* UNIFIED BORDER SYSTEM VARIABLES */
+  --border-thin: 1px solid rgba(255, 255, 255, 0.1);
+  --border-semi: 1px solid rgba(255, 255, 255, 0.08);
+  --glow-inner: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --shadow-subtle: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 /* Reset and Base Styles */
@@ -1281,13 +1288,6 @@ pre,
   font-family: 'Roboto Mono', monospace;
 }
 
-/* QR Code data display */
-.qr-data,
-.qr-result,
-.qr-output {
-  font-family: 'Roboto Mono', monospace;
-}
-
 /* Technical identifiers */
 .identifier,
 .scan-id,
@@ -1334,6 +1334,7 @@ pre,
     direction: ltr;
   }
   
+  /* dashboard-layout already set to 1fr below 1024px, but adding fallback */
   .dashboard-layout {
     grid-template-columns: 1fr;
   }
@@ -1415,18 +1416,16 @@ pre,
   
   .alert-description {
     font-size: 0.75rem;
-    margin: 0 0 0.25rem 0;
-  }
-  
-  .alert-type-badge {
-    padding: 0.1rem 0.4rem;
-    font-size: 0.625rem;
-    margin-top: 0.25rem;
+    color: #999999; /* Explicitly set color for clarity */
+    margin: 0 0 0.375rem 0;
+    line-height: 1.5;
   }
   
   .alert-time {
     font-size: 0.6875rem;
-    margin-top: 0.25rem;
+    margin: 0;
+    line-height: 1.3;
+    font-family: 'Roboto Mono', monospace;
   }
 }
 
@@ -1638,24 +1637,29 @@ pre,
 }
 
 /* ===================================
-   DASHBOARD RESPONSIVE FIX - Focus on layout only
+   DASHBOARD LAYOUT FIXES
    =================================== */
 
+/* Making the dashboard layout fluid on desktop/tablet to be more "adjustable" */
 .dashboard-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  /* Updated to a fluid 1:3 ratio, with a minimum width for the sidebar column */
+  /* Sidebar (Recent Alerts/Quick Scan) | Main Content (Chart/Table) */
+  grid-template-columns: minmax(280px, 1fr) 3fr; 
   gap: 2rem;
   margin-top: 2rem;
 }
 
 @media (max-width: 1200px) {
   .dashboard-layout {
-    grid-template-columns: 280px 1fr;
+    /* Slightly tighter fluid ratio for smaller desktops */
+    grid-template-columns: minmax(250px, 1fr) 2.5fr;
     gap: 1.75rem;
   }
 }
 
 @media (max-width: 1024px) {
+  /* Stacked layout for tablet/mobile, ensuring a clean single column */
   .dashboard-layout {
     grid-template-columns: 1fr;
     gap: 1.5rem;
@@ -1663,14 +1667,137 @@ pre,
   }
 }
 
+/* ===================================
+   TABLE (RECENT SCANS) FIXES - ENSURE ALIGNMENT
+   =================================== */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  table-layout: fixed; /* Ensures column widths are respected */
+}
+
+table thead {
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 2px solid var(--border-color);
+}
+
+table th {
+  padding: 1rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: white;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  /* Apply fixed widths where possible for better alignment */
+  width: auto; 
+}
+
+/* Setting fixed widths for smaller columns */
+table th:nth-child(2) { width: 15%; } /* Type */
+table th:nth-child(3) { width: 15%; } /* Result */
+table th:nth-child(4) { width: 15%; } /* Confidence */
+table th:nth-child(5) { width: 15%; } /* Time */
+table th:nth-child(6) { width: 10%; } /* Actions */
+table th:nth-child(1) { width: 30%; } /* Target - remaining space */
+
+
+table td {
+  padding: 1rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  color: white;
+  vertical-align: middle; /* Align content vertically */
+}
+
+table tbody tr {
+  transition: background var(--transition-speed);
+}
+
+table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.legend-circle {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+/* ===================================
+   TABLE RESPONSIVE MEDIA QUERIES
+   =================================== */
+
+/* Hide Confidence column on small tablets (<= 768px) */
 @media (max-width: 768px) {
-  .dashboard-layout {
-    grid-template-columns: 1fr;
-    gap: 1.25rem;
-    margin-top: 1.25rem;
+  .grid-4 {
+    /* Keep 2 columns for the stat cards on smaller tablets */
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  /* Hide Confidence column on Recent Scans table (4th column) */
+  table th:nth-child(4),
+  table td:nth-child(4) {
+    display: none;
+  }
+
+  /* Re-adjust widths for remaining columns */
+  table th:nth-child(1) { width: 40%; } /* Target */
+  table th:nth-child(2) { width: 20%; } /* Type */
+  table th:nth-child(3) { width: 20%; } /* Result */
+  table th:nth-child(5) { width: 10%; } /* Time */
+  table th:nth-child(6) { width: 10%; } /* Actions */
+}
+
+/* Hide more columns on mobile phones (<= 576px) */
+@media (max-width: 576px) {
+  .grid-4 {
+    /* Keep 2 columns for the stat cards on larger mobile screens */
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  /* Hide Type (2nd), Confidence (4th), Time (5th) columns on Recent Scans table */
+  table th:nth-child(2),
+  table td:nth-child(2),
+  table th:nth-child(4),
+  table td:nth-child(4),
+  table th:nth-child(5),
+  table td:nth-child(5) {
+    display: none;
+  }
+  
+  /* Force Target (1st column) to be max-width and truncate */
+  table td:first-child {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 60% !important; /* Give it most of the space */
+  }
+
+  /* Re-adjust widths for the remaining visible columns: Target, Result, Actions */
+  table th:nth-child(1) { width: 60%; } /* Target */
+  table th:nth-child(3) { width: 20%; } /* Result */
+  table th:nth-child(6) { width: 20%; } /* Actions */
+
+  /* Ensure long alert descriptions wrap correctly */
+  .alert-description {
+    word-break: break-all;
   }
 }
 
+/* Stack stat cards on very small phones (<= 400px) */
+@media (max-width: 400px) {
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Keeping original small-screen media queries */
 @media (max-width: 480px) {
   .dashboard-layout {
     grid-template-columns: 1fr;
@@ -1891,4 +2018,198 @@ pre,
 /* Toggle slider - just update border */
 .toggle-slider {
   border: var(--border-thin) !important;
+}
+
+/* Custom animation for the login hero background - REMOVED ANIMATION FOR NEW LOOK */
+@keyframes flow-background {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* Custom login page styling to differentiate the look */
+.login-page .login-card {
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+    /* NEW: Darker transparent background for a security module look */
+    background: rgba(15, 15, 16, 0.8);
+    border: 2px solid rgba(0, 183, 217, 0.4);
+    box-shadow: 0 0 50px rgba(0, 183, 217, 0.1);
+    backdrop-filter: blur(8px);
+}
+
+.login-page .login-card:hover {
+    box-shadow: 0 0 60px rgba(0, 183, 217, 0.3), 0 0 5px var(--accent-cyan);
+    border-color: var(--accent-cyan);
+}
+
+/* Login Feature List Overhaul */
+.login-features {
+    padding: 1rem 0;
+    margin-bottom: 2rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.login-page .login-feature-item {
+    display: grid;
+    grid-template-columns: 24px 1fr; /* Icon width, then text */
+    gap: 1rem;
+    padding: 0.75rem 0;
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.9);
+    align-items: center;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+}
+
+.login-page .login-feature-item:last-child {
+    border-bottom: none;
+}
+
+.login-page .login-feature-item:hover {
+    background-color: transparent; /* Remove hover background */
+    transform: translateX(5px);
+}
+
+.login-page .login-feature-icon {
+    /* Style icons as distinct markers */
+    width: 24px;
+    height: 24px;
+    color: var(--accent-cyan) !important; 
+    filter: drop-shadow(0 0 4px var(--accent-cyan));
+    transition: filter 0.3s ease;
+}
+
+.login-page .login-feature-item:hover .login-feature-icon {
+    filter: drop-shadow(0 0 8px var(--accent-cyan));
+}
+
+/* Added specific styles for the login hero section - NO ANIMATION */
+.login-hero {
+    background: linear-gradient(180deg, rgba(0, 183, 217, 0.08) 0%, transparent 100%); /* Simpler, static gradient */
+    padding: 4rem 1.5rem 2rem;
+    text-align: center;
+    background-size: 100% 100%;
+    animation: none; /* Ensure animation is off */
+}
+
+.login-hero h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1.75rem, 5vw, 2.5rem);
+    font-weight: 700;
+    color: white;
+    margin-bottom: 0.75rem;
+    letter-spacing: 0.02em;
+}
+
+.login-hero p {
+    font-family: 'Inter', sans-serif;
+    color: var(--text-muted);
+    font-size: 1rem;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+/* Styles moved from inline/style block in login.html */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.login-content {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    padding: 0 1.5rem 4rem;
+}
+
+.login-card {
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    max-width: 560px;
+    width: 100%;
+}
+
+.login-card-header {
+    margin-bottom: 1.5rem;
+}
+
+.login-card-header h2 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 0.75rem;
+}
+
+.login-card-header p {
+    font-family: 'Inter', sans-serif;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+
+.login-form-section {
+    border-top: 1px solid var(--border-color);
+    padding-top: 1.5rem;
+}
+
+.login-form-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+    display: block;
+}
+
+.login-input-group {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.login-input-group .form-input {
+    flex: 1;
+    font-family: 'Inter', sans-serif;
+}
+
+.login-input-group .btn {
+    flex-shrink: 0;
+    padding: 0.75rem 1.5rem;
+    font-family: 'Inter', sans-serif;
+}
+
+.login-note {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.login-note a {
+    color: var(--primary-blue); /* Use primary-blue for links */
+    text-decoration: none;
+}
+
+@media (max-width: 600px) {
+    .login-hero {
+        padding: 3rem 1rem 1.5rem;
+    }
+
+    .login-card {
+        padding: 1.5rem;
+    }
+
+    .login-input-group {
+        flex-direction: column;
+    }
+
+    .login-input-group .btn {
+        width: 100%;
+    }
 }
