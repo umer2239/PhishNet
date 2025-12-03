@@ -98,13 +98,13 @@ class NavigationManager {
         const user = auth.getUser();
         userAvatar.textContent = user.initials;
 
-        // 🔴 Hide extra dashboard button (even on landing page)
+        // Hide extra dashboard button (even on landing page)
         if (dashboardButton) dashboardButton.style.display = 'none';
       } else {
         authButtons.style.display = 'flex';
         userAvatar.style.display = 'none';
 
-        // 🟢 Show dashboard button only for guests
+        // Show dashboard button only for guests
         if (dashboardButton) dashboardButton.style.display = 'inline-flex';
       }
     }
@@ -112,7 +112,7 @@ class NavigationManager {
     // Apply logged-in class for global styling
     document.body.classList.toggle('logged-in', isLoggedIn);
 
-    // 🧠 Safety check for landing page late load
+    // Safety check for landing page late load
     if (isLoggedIn && window.location.pathname.includes('index.html')) {
       setTimeout(() => {
         const landingDashboardBtn = document.querySelector('.btn-dashboard');
@@ -175,13 +175,13 @@ class NavigationManager {
   }
 
   setupEventListeners() {
-    // Dashboard button click handler
+    // Dashboard button click handler - redirect to login if not logged in
     const dashboardButtons = document.querySelectorAll('.btn-dashboard, [href="dashboard.html"]');
     dashboardButtons.forEach(btn => {
       btn.addEventListener('click', (e) => {
         if (!auth.isLoggedIn()) {
           e.preventDefault();
-          window.location.href = 'signup.html';
+          window.location.href = 'login.html';
         }
       });
     });
@@ -285,11 +285,11 @@ class ScanManager {
       return;
     }
 
-    // Check if guest can scan
+    // Check if guest can scan - redirect to login if scan limit reached
     if (!auth.isLoggedIn() && !auth.canScanAsGuest()) {
-      this.showNotification('Sign up to continue scanning', 'warning');
+      this.showNotification('Login to continue scanning', 'warning');
       setTimeout(() => {
-        window.location.href = 'signup.html';
+        window.location.href = 'login.html';
       }, 2000);
       return;
     }
@@ -385,41 +385,36 @@ class ScanManager {
 class FormManager {
   constructor() {
     this.setupLoginForm();
-    this.setupSignupForm();
     this.setupSettingsForm();
   }
 
   setupLoginForm() {
-    const loginForm = document.querySelector('.auth-card form');
+    // Handle login form on login.html page - email only authentication
+    const loginForm = document.querySelector('#login-form');
     if (loginForm && window.location.pathname.includes('login.html')) {
       loginForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const email = document.querySelector('#email').value;
-        const password = document.querySelector('#password').value;
+        const emailInput = document.querySelector('#email');
+        const email = emailInput ? emailInput.value.trim() : '';
 
-        if (email && password) {
+        if (email) {
+          // Login with email only - no password required
           auth.login(email);
           window.location.href = 'dashboard.html';
         }
       });
     }
-  }
 
-  setupSignupForm() {
-    const signupForm = document.querySelector('.auth-card form');
-    if (signupForm && window.location.pathname.includes('signup.html')) {
-      signupForm.addEventListener('submit', (e) => {
+    // Also handle any auth-card forms (fallback for other login forms)
+    const authCardForm = document.querySelector('.auth-card form');
+    if (authCardForm && window.location.pathname.includes('login.html')) {
+      authCardForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const email = document.querySelector('#email').value;
-        const password = document.querySelector('#password').value;
-        const confirmPassword = document.querySelector('#confirm-password').value;
+        const emailInput = document.querySelector('#email');
+        const email = emailInput ? emailInput.value.trim() : '';
 
-        if (password !== confirmPassword) {
-          alert('Passwords do not match');
-          return;
-        }
-
-        if (email && password) {
+        if (email) {
+          // Login with email only - no password required
           auth.login(email);
           window.location.href = 'dashboard.html';
         }
@@ -437,48 +432,6 @@ class FormManager {
     }
   }
 }
-// === Password toggle (minimal) ===
-(function () {
-  const toggles = Array.from(document.querySelectorAll('.pw-toggle'));
-  if (!toggles.length) return;
-
-  toggles.forEach(btn => {
-    const targetId = btn.getAttribute('data-target');
-    let input = targetId ? document.getElementById(targetId) : null;
-    if (!input) {
-      const parent = btn.closest('.input-with-toggle') || btn.closest('.form-group');
-      input = parent ? parent.querySelector('.password-field, input[type="password"]') : null;
-    }
-    if (!input) return;
-
-    // initial icon state
-    updateButtonState(btn, input);
-
-    btn.addEventListener('click', () => {
-      const wasHidden = input.type === 'password';
-      input.type = wasHidden ? 'text' : 'password';
-      updateButtonState(btn, input);
-      input.focus();
-      try {
-        const val = input.value || '';
-        input.setSelectionRange(val.length, val.length);
-      } catch (e) {}
-    });
-  });
-
-  function updateButtonState(btn, input) {
-    const isHidden = input.type === 'password';
-    btn.setAttribute('aria-label', isHidden ? 'Show password' : 'Hide password');
-    btn.title = isHidden ? 'Show password' : 'Hide password';
-    const vis = btn.querySelector('.eye-visible');
-    const hid = btn.querySelector('.eye-hidden');
-    if (vis && hid) {
-      vis.style.display = isHidden ? 'block' : 'none';
-      hid.style.display = isHidden ? 'none' : 'block';
-    }
-  }
-})();
-
 
 // ==================== INITIALIZE ON PAGE LOAD ====================
 document.addEventListener('DOMContentLoaded', () => {
