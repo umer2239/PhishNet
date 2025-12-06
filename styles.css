@@ -2213,3 +2213,53 @@ table tbody tr:hover {
         width: 100%;
     }
 }
+/* === Typewriter helpers (replace previous block) === */
+#hero-typewriter {
+  white-space: pre-wrap;
+  display: inline;
+  font-family: inherit;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  line-height: 1; /* helps alignment */
+}
+
+/* Thick block cursor aligned to text bottom, sharp corners */
+.type-cursor {
+  display: inline-block;
+  width: 0.65ch;       /* block width */
+  height: 1em;         /* match approx text height */
+  margin-left: 0.35rem;
+  vertical-align: text-bottom; /* align to bottom of text */
+  line-height: 1;
+  position: relative;
+  overflow: visible;
+  /* ensure it sits flush with baseline */
+  transform: translateY(0);
+}
+
+/* Render a filled block as the cursor using pseudo-element */
+.type-cursor::after {
+  content: '';
+  display: inline-block;
+  width: 100%;
+  height: 100%;
+  background: currentColor; /* uses text color */
+  border-radius: 0;         /* sharp corners */
+  opacity: 1;
+  animation: phishnet-cursor-blink 1s steps(1) infinite;
+  transform-origin: center;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .type-cursor::after {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+@keyframes phishnet-cursor-blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}

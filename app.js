@@ -451,3 +451,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Make auth available globally for inline event handlers
 window.auth = auth;
+// ==================== HERO TYPEWRITER (ALWAYS RUN) ====================
+(function() {
+  try {
+    const path = window.location.pathname.split('/').pop();
+    if (!(path === '' || path === 'index.html' || path === '/')) return;
+
+    const target = document.getElementById('hero-typewriter');
+    const cursor = document.querySelector('.type-cursor');
+
+    if (!target) {
+      if (cursor) cursor.style.display = 'none';
+      return;
+    }
+
+    // Make cursor visible before typing
+    if (cursor) {
+      cursor.style.display = 'inline-block';
+      cursor.style.opacity = '1';
+    }
+
+    const fullText = target.getAttribute('data-text') || target.textContent.trim();
+    target.textContent = ''; // start empty
+
+    let i = 0;
+    const speed = 30;
+
+    function typeStep() {
+      if (i < fullText.length) {
+        target.textContent += fullText.charAt(i);
+        i++;
+        setTimeout(typeStep, speed);
+      } else {
+        // Hide cursor when done
+        if (cursor) {
+          cursor.style.transition = 'opacity 120ms linear';
+          cursor.style.opacity = '0';
+          setTimeout(() => { cursor.style.display = 'none'; }, 140);
+        }
+      }
+    }
+
+    setTimeout(typeStep, 350);
+  } catch (err) {
+    console.error('Typewriter error:', err);
+  }
+})();
