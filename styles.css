@@ -2263,3 +2263,371 @@ table tbody tr:hover {
   50% { opacity: 0; }
   100% { opacity: 1; }
 }
+/* ---------- Smooth swap & email-preview styling ---------- */
+
+.animated-hidden {
+  display: none;
+  opacity: 0;
+  transform: translateY(0);
+  max-height: 0;
+  overflow: hidden;
+}
+
+/* swipe-up-in (smooth) */
+@keyframes swipeUpIn {
+  0% { opacity: 0; transform: translateY(26px) scale(0.997); max-height: 0; }
+  60% { opacity: 1; transform: translateY(-6px) scale(1.003); max-height: 300px; }
+  100% { opacity: 1; transform: translateY(0) scale(1); max-height: 300px; }
+}
+.swipe-up-in {
+  display: block !important;
+  animation: swipeUpIn 420ms cubic-bezier(.16,.9,.24,1) forwards;
+  will-change: transform, opacity;
+}
+
+/* swipe-up-out (smooth) */
+@keyframes swipeUpOut {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  45% { opacity: 0.78; transform: translateY(-10px) scale(0.998); }
+  100% { opacity: 0; transform: translateY(-30px) scale(0.985); height:0; margin:0; padding:0; }
+}
+.swipe-up-out {
+  animation: swipeUpOut 360ms cubic-bezier(.12,.9,.18,1) forwards;
+  will-change: transform, opacity;
+}
+
+/* Email preview shown above password with low opacity */
+.email-display {
+  color: rgba(255,255,255,0.65);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+  margin: 0.35rem 0;
+  transition: opacity 220ms ease, transform 220ms ease;
+  opacity: 0.9;
+}
+
+/* keep wrappers full width so button doesn't jump */
+#emailFieldWrapper, #passwordFieldWrapper {
+  width: 100%;
+}
+
+/* keep button width consistent and right-aligned */
+#signinBtnWrapper {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* inline form error style */
+.form-error {
+  color: #FF6B6B;
+  font-size: 0.82rem;
+  margin-top: 0.35rem;
+  font-family: 'Inter', sans-serif;
+}
+
+/* subtle input focus transition */
+#passwordFieldWrapper .form-input, #emailFieldWrapper .form-input {
+  transition: box-shadow 180ms ease, transform 180ms ease, opacity 120ms ease;
+}
+
+/* respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .swipe-up-in, .swipe-up-out {
+    animation-duration: 1ms !important;
+  }
+}
+/* --- Make "Forgot Password" & "Use different email" smaller & subtle --- */
+
+#authLinks a,
+#authLinks a:visited,
+#authLinks a:active {
+  color: rgba(255,255,255,0.60);
+  font-size: 0.80rem;        /* smaller size */
+  font-weight: 400;          /* lighter weight */
+  text-decoration: none;
+  opacity: 0.85;
+  transition: color 180ms ease, opacity 180ms ease;
+}
+
+#authLinks a:hover,
+#authLinks a:focus {
+  color: rgba(255,255,255,0.78);
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/* individual refinement */
+#useDifferentEmail,
+#forgotPasswordLink {
+  font-size: 0.78rem !important;
+  opacity: 0.80;
+}
+
+/* spacing between the small links */
+#authLinks {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+/* AuthLinks (Always visible - small clean style) */
+.auth-links {
+  margin-top: 1.2rem;
+  text-align: center;
+}
+
+.auth-links .small-text {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.55);
+  margin-right: 6px;
+}
+
+#signupLink {
+  color: #0B63D9;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+#signupLink:hover {
+  text-decoration: underline;
+}
+
+/* Extra options (Password stage only) */
+.extra-options {
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.dim-link {
+  display: block;
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.45);
+  text-decoration: none;
+  margin-top: 0.4rem;
+}
+
+.dim-link:hover {
+  color: rgba(255,255,255,0.75);
+  text-decoration: underline;
+}
+
+/* =========================
+   Signup / Login shared fixes
+   ========================= */
+
+/* Ensure signup and login cards match spacing */
+.signup-card,
+.login-card {
+  max-width: 560px;
+  width: 100%;
+  padding: 2rem;
+  border-radius: var(--radius-lg);
+}
+
+/* form group spacing consistent */
+.signup-card .form-group,
+.login-card .form-group,
+.login-form-section .form-group {
+  margin-bottom: 1rem;
+}
+
+/* small error style (single definition) */
+.form-error {
+  color: #FF6B6B;
+  font-size: 0.82rem;
+  margin-top: 0.35rem;
+  font-family: 'Inter', sans-serif;
+}
+
+/* subtle login/signup link style */
+#login-link {
+  color: rgba(255,255,255,0.92);
+  text-decoration: none;
+  font-weight: 600;
+}
+#login-link:hover {
+  text-decoration: underline;
+  color: rgba(255,255,255,1);
+}
+
+/* ---------------- Signup form row (first+last) ---------------- */
+.form-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+.form-row .split { flex: 1; }
+
+/* Responsive: stack fields on small screens */
+@media (max-width: 600px) {
+  .form-row { flex-direction: column; }
+}
+
+/* ---------------- Password toggle & strength meter ---------------- */
+/* Positioning container */
+.input-with-toggle { position: relative; }
+
+/* Give password input room on the right so text doesn't overlap the eye */
+/* Slightly reduced compared to older value for better visual centering */
+.input-with-toggle .password-field {
+  padding-right: 3.2rem; /* room for the eye button */
+  box-sizing: border-box;
+}
+
+/* Eye button: aligned inside the input on the right */
+/* NOTE: translateY(-48%) gives optical centering for your input sizes */
+.input-with-toggle .pw-toggle {
+  position: absolute;
+  right: 0.6rem;               /* tweak for visual alignment */
+  top: 50%;
+  transform: translateY(-48%); /* optical center (was -50%) */
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.72);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  transition: color 160ms ease, transform 160ms ease;
+}
+.input-with-toggle .pw-toggle svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+/* Active (when password is visible) - maintain the same offset */
+.input-with-toggle .pw-toggle.active {
+  opacity: 0.95;
+  transform: translateY(-48%) scale(1.03);
+}
+
+/* Slightly increase touch area on very small screens */
+@media (max-width: 420px) {
+  .input-with-toggle .pw-toggle { right: 0.5rem; padding: 0.35rem; transform: translateY(-47%); }
+}
+
+/* Hover accessibility */
+.input-with-toggle .pw-toggle:hover { color: rgba(255,255,255,0.92); }
+.input-with-toggle .pw-toggle:focus { outline: 2px solid rgba(11,99,217,0.18); border-radius: 6px; }
+
+/* ---------------- Password strength meter visuals ---------------- */
+.pwd-meter {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  align-items: center;
+}
+.pwd-bar {
+  height: 8px;
+  flex: 1;
+  background: rgba(255,255,255,0.06); /* base (empty) */
+  border-radius: 3px;
+  transition: background 260ms cubic-bezier(.2,.9,.2,1), transform 220ms ease;
+  transform-origin: left center;
+}
+
+/* Slight scale consistency for animated feel */
+.pwd-bar:nth-child(1) { transform: scaleX(1); }
+.pwd-bar:nth-child(2) { transform: scaleX(1); }
+.pwd-bar:nth-child(3) { transform: scaleX(1); }
+.pwd-bar:nth-child(4) { transform: scaleX(1); }
+
+/* ---------------- Optional strength classes (useful if JS toggles classes) ---------------- */
+/* weak = red, fair = orange, good = yellow, strong = green */
+.pwd-meter.weak .pwd-bar:nth-child(1) { background: #FF4D4D; transform: scaleX(1.02); }
+.pwd-meter.fair  .pwd-bar:nth-child(1) { background: #FF4D4D; transform: scaleX(1.02); }
+.pwd-meter.fair  .pwd-bar:nth-child(2) { background: #FF8A00; transform: scaleX(1.04); }
+.pwd-meter.good  .pwd-bar:nth-child(1) { background: #FF4D4D; transform: scaleX(1.02); }
+.pwd-meter.good  .pwd-bar:nth-child(2) { background: #FF8A00; transform: scaleX(1.04); }
+.pwd-meter.good  .pwd-bar:nth-child(3) { background: #FFD600; transform: scaleX(1.06); }
+.pwd-meter.strong .pwd-bar:nth-child(1){ background: #FF4D4D; transform: scaleX(1.02); }
+.pwd-meter.strong .pwd-bar:nth-child(2){ background: #FF8A00; transform: scaleX(1.04); }
+.pwd-meter.strong .pwd-bar:nth-child(3){ background: #FFD600; transform: scaleX(1.06); }
+.pwd-meter.strong .pwd-bar:nth-child(4){ background: #00C853; transform: scaleX(1.08); }
+
+/* Optional: color target text (#pwdStrength) when parent meter has class */
+.pwd-meter.weak ~ #pwdStrength,
+.pwd-meter.weak + #pwdStrength,
+.pwd-meter.weak #pwdStrength {
+  color: #FF4D4D !important;
+}
+.pwd-meter.fair ~ #pwdStrength,
+.pwd-meter.fair + #pwdStrength,
+.pwd-meter.fair #pwdStrength {
+  color: #FF8A00 !important;
+}
+.pwd-meter.good ~ #pwdStrength,
+.pwd-meter.good + #pwdStrength,
+.pwd-meter.good #pwdStrength {
+  color: #FFD600 !important;
+}
+.pwd-meter.strong ~ #pwdStrength,
+.pwd-meter.strong + #pwdStrength,
+.pwd-meter.strong #pwdStrength {
+  color: #00C853 !important;
+}
+
+/* ---------------- Misc / housekeeping ---------------- */
+/* Only hide login-features on signup page — leave login page features visible */
+.signup-page .login-features { display: none !important; }
+
+/* Show-password checkbox small styling */
+.show-pw input[type="checkbox"] {
+  accent-color: #0B63D9; /* subtle blue when checked */
+  width: 16px;
+  height: 16px;
+}
+.show-pw span {
+  font-size: 0.88rem;
+  color: rgba(255,255,255,0.6);
+}
+
+
+/* Signup button appearance (keeps theme but slightly softer shadow) */
+#signup-button.btn-primary {
+  box-shadow: 0 0 10px rgba(11, 99, 217, 0.28);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+#signup-button.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 18px rgba(11,99,217,0.36);
+}
+
+/* Login note spacing */
+.login-note { margin-top: 1rem; }
+
+/* Form labels */
+.form-label {
+  color: rgba(255,255,255,0.92);
+  font-size: 0.92rem;
+  margin-bottom: 0.35rem;
+  display: block;
+}
+
+/* Fine tune small-screen paddings/inputs if needed */
+@media (max-width: 420px) {
+  .signup-card, .login-card { padding: 1.25rem; }
+  .input-with-toggle .password-field { padding-right: 3rem; }
+}
+/* Make signup card visually match the login card (glass, border, glow, blur) */
+.signup-page .signup-card,
+.signup-card {
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+  background: rgba(15, 15, 16, 0.8);
+  border: 2px solid rgba(0, 183, 217, 0.4);
+  box-shadow: 0 0 50px rgba(0, 183, 217, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+.signup-page .signup-card:hover,
+.signup-card:hover {
+  box-shadow: 0 0 60px rgba(0, 183, 217, 0.3), 0 0 5px var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+

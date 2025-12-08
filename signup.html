@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Signup - PhishNet</title>
+  <meta name="description" content="Create your PhishNet account to access scanning and security dashboard.">
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@400;500;600;700;800;900&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<!-- NOTE: body has signup-page class so signup-specific CSS applies -->
+<body class="signup-page">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <header>
+    <div class="header-container">
+      <a href="index.html" class="brand-logo">
+        <span class="logo-text">PhishNet</span>
+      </a>
+
+      <nav>
+        <ul class="nav-links">
+          <!-- populated by app.js -->
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <section class="login-hero">
+      <h1>Security Gateway: Create Account</h1>
+      <p>Get access to advanced threat monitoring, reports, and enterprise features.</p>
+    </section>
+
+    <section class="login-content">
+      <div class="login-card animate-fade-in signup-card">
+        <div class="login-card-header">
+          <h2>Create your account</h2>
+          <p>Sign up to access PhishNet's scanning tools and dashboard.</p>
+        </div>
+
+        <!-- FEATURES intentionally removed on signup page only -->
+
+        <div class="login-form-section">
+          <form id="signup-form" novalidate>
+            <!-- First + Last on same row -->
+            <div class="form-row">
+              <div class="form-group split">
+                <label for="firstName" class="form-label">First name</label>
+                <input type="text" id="firstName" class="form-input" placeholder="First name" required autocomplete="given-name" />
+              </div>
+
+              <div class="form-group split">
+                <label for="lastName" class="form-label">Last name</label>
+                <input type="text" id="lastName" class="form-input" placeholder="Last name" required autocomplete="family-name" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="signup-email" class="form-label">Enter your Email</label>
+              <input type="email" id="signup-email" class="form-input" placeholder="you@company.com" required autocomplete="email" />
+              <div id="signupEmailError" class="form-error" style="display:none;"></div>
+            </div>
+
+            <div class="form-group">
+              <label for="signup-password" class="form-label">Password</label>
+              <input type="password" id="signup-password" class="form-input password-field" placeholder="Create a strong password" required autocomplete="new-password" />
+            </div>
+
+            <div class="form-group">
+              <label for="signup-confirm" class="form-label">Confirm Password</label>
+              <input type="password" id="signup-confirm" class="form-input password-field" placeholder="Confirm password" required autocomplete="new-password" />
+              <div id="signupPasswordError" class="form-error" style="display:none;"></div>
+            </div>
+
+            <!-- Password strength meter -->
+            <div class="form-group">
+              <div class="pwd-meter" id="pwdMeter" aria-hidden="true">
+                <div class="pwd-bar" id="pwdBar1"></div>
+                <div class="pwd-bar" id="pwdBar2"></div>
+                <div class="pwd-bar" id="pwdBar3"></div>
+                <div class="pwd-bar" id="pwdBar4"></div>
+              </div>
+              <div id="pwdStrengthText" style="margin-top:0.5rem; font-size:0.875rem; color:rgba(255,255,255,0.85);">
+                Password strength: <span id="pwdStrength">—</span>
+              </div>
+              <div style="font-size:0.82rem; color:rgba(255,255,255,0.6); margin-top:0.25rem;">
+                Password must be at least <strong>6 characters</strong>, include uppercase, lowercase, and a number or symbol.
+              </div>
+            </div>
+
+            <!-- Show password checkbox (small, light grey) -->
+            <div class="form-group show-pw" style="margin-top:0.5rem;">
+              <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;color:rgba(255,255,255,0.6);">
+                <input type="checkbox" id="showPasswords" style="width:16px;height:16px;">
+                <span style="font-size:0.88rem;color:rgba(255,255,255,0.6);">Show password</span>
+              </label>
+            </div>
+
+            <div style="display:flex;gap:0.5rem;align-items:center; margin-top:0.75rem;">
+              <button type="submit" class="btn btn-primary" id="signup-button">Create Account</button>
+            </div>
+
+            <p class="login-note">
+              By creating an account, you agree to our <a href="terms.html">Terms of Service</a> and <a href="privacy.html">Privacy Policy</a>. Your data is protected and encrypted.
+            </p>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-grid">
+      <div class="footer-section">
+        <h4>Quick URL Scan</h4>
+        <div class="footer-quick-check">
+          <input type="text" placeholder="Enter URL " class="form-input">
+          <button class="btn btn-primary btn-sm">Quick Check</button>
+        </div>
+      </div>
+
+      <div class="footer-section">
+        <h4>Services</h4>
+        <ul>
+          <li><a href="dashboard.html">Email/URL Scan</a></li>
+          <li><a href="dashboard.html">Dashboard</a></li>
+          <li><a href="pricing.html">Pricing</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-section">
+        <h4>About</h4>
+        <ul>
+          <li><a href="terms.html">Terms & Services</a></li>
+          <li><a href="privacy.html">Privacy Policy</a></li>
+          <li><a href="faq.html">FAQs</a></li>
+          <li><a href="about.html">Features</a></li>
+          <li><a href="blog.html">Blog</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-section">
+        <h4>Connect With Us</h4>
+        <div class="footer-socials">
+          <!-- icons omitted for brevity -->
+          <a href="#" aria-label="Instagram">IG</a>
+          <a href="#" aria-label="Facebook">FB</a>
+          <a href="#" aria-label="Twitter">TW</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-copyright">
+      © 2025 PhishNet. All rights reserved.
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

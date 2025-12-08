@@ -35,12 +35,19 @@ class AuthManager {
   }
 
   getInitials(email) {
-    const name = email.split('@')[0];
+    const name = (email || '').split('@')[0];
     const parts = name.split(/[._-]/);
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-    return name.substring(0, 2).toUpperCase();
+    return (name.substring(0, 2) || '').toUpperCase();
+  }
+
+  setProfile(profile) {
+    // profile: {firstName, lastName, email}
+    const user = Object.assign({}, this.getUser() || {}, profile);
+    if (profile.email) user.initials = this.getInitials(profile.email);
+    localStorage.setItem(this.storageKey, JSON.stringify(user));
   }
 
   getScanCount() {
@@ -386,40 +393,313 @@ class FormManager {
   constructor() {
     this.setupLoginForm();
     this.setupSettingsForm();
+    this.setupSignupForm(); // ensure signup handler runs if present
   }
 
   setupLoginForm() {
-    // Handle login form on login.html page - email only authentication
+    // Handle login form on login.html page - two-stage: email -> password
     const loginForm = document.querySelector('#login-form');
-    if (loginForm && window.location.pathname.includes('login.html')) {
-      loginForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const emailInput = document.querySelector('#email');
-        const email = emailInput ? emailInput.value.trim() : '';
+    if (!loginForm || !window.location.pathname.includes('login.html')) return;
 
-        if (email) {
-          // Login with email only - no password required
-          auth.login(email);
-          window.location.href = 'dashboard.html';
-        }
+    const emailInput = document.querySelector('#email');
+    const passwordInput = document.querySelector('#password');
+    const emailFieldWrapper = document.querySelector('#emailFieldWrapper');
+    const passwordFieldWrapper = document.querySelector('#passwordFieldWrapper');
+    const emailError = document.querySelector('#emailError');
+    const emailDisplay = document.querySelector('#emailDisplay');
+    const authLinks = document.querySelector('#authLinks');
+    const loginLabel = document.querySelector('#login-label');
+    const useDifferentEmail = document.querySelector('#useDifferentEmail');
+
+    let passwordStage = false;
+
+    function isValidEmail(value) {
+      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return re.test(value);
+    }
+
+    function showElement(el) {
+      if (!el) return;
+      el.classList.remove('animated-hidden');
+      el.classList.remove('swipe-up-out');
+      el.style.display = 'block';
+      setTimeout(() => el.classList.add('swipe-up-in'), 10);
+      el.setAttribute('aria-hidden', 'false');
+    }
+
+    function hideElementWithOut(el, cb) {
+      if (!el) { if (cb) cb(); return; }
+      el.classList.remove('swipe-up-in');
+      el.classList.add('swipe-up-out');
+      el.addEventListener('animationend', function handler() {
+        el.style.display = 'none';
+        el.classList.remove('swipe-up-out');
+        el.removeEventListener('animationend', handler);
+        if (cb) cb();
       });
     }
 
-    // Also handle any auth-card forms (fallback for other login forms)
-    const authCardForm = document.querySelector('.auth-card form');
-    if (authCardForm && window.location.pathname.includes('login.html')) {
-      authCardForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const emailInput = document.querySelector('#email');
-        const email = emailInput ? emailInput.value.trim() : '';
+    function enterPasswordStage(emailVal) {
+      passwordStage = true;
+      if (emailDisplay) {
+        emailDisplay.textContent = emailVal;
+        emailDisplay.style.display = 'block';
+        setTimeout(() => {
+          emailDisplay.classList.remove('animated-hidden');
+          emailDisplay.classList.add('swipe-up-in');
+        }, 10);
+        emailDisplay.setAttribute('aria-hidden', 'false');
+      }
+      if (emailFieldWrapper) hideElementWithOut(emailFieldWrapper);
+      if (passwordFieldWrapper) {
+        passwordFieldWrapper.style.display = 'block';
+        setTimeout(() => showElement(passwordFieldWrapper), 20);
+      }
+      // keep authLinks visible (user requested it to be present during email stage as well)
+      if (authLinks) {
+        authLinks.style.display = 'block';
+        setTimeout(() => {
+          authLinks.classList.remove('animated-hidden');
+          authLinks.classList.add('swipe-up-in');
+        }, 20);
+        authLinks.setAttribute('aria-hidden', 'false');
+      }
+      if (loginLabel) loginLabel.textContent = 'Enter your password:';
+      setTimeout(() => { if (passwordInput) passwordInput.focus(); }, 420);
+    }
 
-        if (email) {
-          // Login with email only - no password required
-          auth.login(email);
-          window.location.href = 'dashboard.html';
+    function backToEmailStage() {
+      passwordStage = false;
+      if (passwordFieldWrapper) {
+        hideElementWithOut(passwordFieldWrapper, () => {
+          if (emailFieldWrapper) { emailFieldWrapper.style.display = 'block'; setTimeout(() => showElement(emailFieldWrapper), 20); }
+        });
+      } else {
+        if (emailFieldWrapper) { emailFieldWrapper.style.display = 'block'; setTimeout(() => showElement(emailFieldWrapper), 20); }
+      }
+      // IMPORTANT: keep authLinks visible when returning to email stage (user requested)
+      if (emailDisplay) {
+        emailDisplay.classList.remove('swipe-up-in');
+        emailDisplay.classList.add('swipe-up-out');
+        emailDisplay.addEventListener('animationend', function hidePreview() {
+          emailDisplay.classList.remove('swipe-up-out');
+          emailDisplay.classList.add('animated-hidden');
+          emailDisplay.style.display = 'none';
+          emailDisplay.removeEventListener('animationend', hidePreview);
+        });
+      }
+      if (loginLabel) loginLabel.textContent = 'Enter your email address to sign in:';
+      setTimeout(() => { if (emailInput) emailInput.focus(); }, 300);
+    }
+
+    // Make authLinks visible from the start (so "Don't have account? Signup" shows during email stage)
+    if (authLinks) {
+      authLinks.style.display = 'block';
+      authLinks.classList.remove('animated-hidden');
+      authLinks.setAttribute('aria-hidden', 'false');
+    }
+
+    if (useDifferentEmail) {
+      useDifferentEmail.addEventListener('click', (ev) => { ev.preventDefault(); backToEmailStage(); });
+    }
+
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const emailVal = emailInput ? emailInput.value.trim() : (emailDisplay ? emailDisplay.textContent.trim() : '');
+      const pwdVal = passwordInput ? passwordInput.value.trim() : '';
+
+      if (!passwordStage) {
+        if (!emailVal) {
+          if (emailError) { emailError.style.display = 'block'; emailError.textContent = 'Email is required.'; } else alert('Please enter your email address.');
+          if (emailInput) emailInput.focus();
+          return;
         }
+        if (!isValidEmail(emailVal)) {
+          if (emailError) { emailError.style.display = 'block'; emailError.textContent = 'Please enter a valid email address (example: user@domain.com).'; } else alert('Please enter a valid email address.');
+          if (emailInput) emailInput.focus();
+          return;
+        }
+        if (emailError) emailError.style.display = 'none';
+        enterPasswordStage(emailVal);
+        return;
+      }
+
+      if (!pwdVal) {
+        alert('Please enter your password.');
+        if (passwordInput) passwordInput.focus();
+        return;
+      }
+
+      const finalEmail = emailVal || (emailDisplay ? emailDisplay.textContent : '');
+      auth.login(finalEmail);
+      window.location.href = 'dashboard.html';
+    });
+
+    if (emailInput) {
+      emailInput.addEventListener('input', () => { if (emailError && emailError.style.display !== 'none') emailError.style.display = 'none'; });
+    }
+  }
+
+  setupSignupForm() {
+    // Signup page handling: validate fields and create profile
+    const signupForm = document.querySelector('#signup-form');
+    if (!signupForm || !window.location.pathname.includes('signup.html')) return;
+
+    const fName = document.querySelector('#firstName');
+    const lName = document.querySelector('#lastName');
+    const email = document.querySelector('#signup-email');
+    const pwd = document.querySelector('#signup-password');
+    const confirm = document.querySelector('#signup-confirm');
+    const emailError = document.querySelector('#signupEmailError');
+    const pwdError = document.querySelector('#signupPasswordError');
+
+    // UI elements for strength meter
+    const bar1 = document.getElementById('pwdBar1');
+    const bar2 = document.getElementById('pwdBar2');
+    const bar3 = document.getElementById('pwdBar3');
+    const bar4 = document.getElementById('pwdBar4');
+    const strengthText = document.getElementById('pwdStrength');
+    const meter = document.getElementById('pwdMeter');
+
+    // show passwords checkbox
+    const showPasswords = document.getElementById('showPasswords');
+
+    function isValidEmail(value) {
+      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return re.test(value);
+    }
+
+    // password strength scoring:
+    // score 0..4 => Weak, Fair, Good, Strong
+    function passwordScore(pass) {
+      let score = 0;
+      if (!pass || pass.length < 1) return 0;
+      // length >=6
+      if (pass.length >= 6) score++;
+      // has lowercase & uppercase
+      if (/[a-z]/.test(pass) && /[A-Z]/.test(pass)) score++;
+      // has digits
+      if (/\d/.test(pass)) score++;
+      // has special char
+      if (/[^A-Za-z0-9]/.test(pass)) score++;
+      return score;
+    }
+
+    function updateStrengthUI(pass) {
+      const s = passwordScore(pass);
+
+      // reset
+      [bar1, bar2, bar3, bar4].forEach(b => b && (b.style.background = 'rgba(255,255,255,0.06)'));
+
+      // colours you requested
+      const COLOR_WEAK   = '#FF4D4D';   // red
+      const COLOR_FAIR   = '#FF8A00';   // orange
+      const COLOR_GOOD   = '#FFD600';   // yellow
+      const COLOR_STRONG = '#00C853';   // green
+
+      if (s >= 1 && bar1) bar1.style.background = COLOR_WEAK;
+      if (s >= 2 && bar2) bar2.style.background = COLOR_FAIR;
+      if (s >= 3 && bar3) bar3.style.background = COLOR_GOOD;
+      if (s >= 4 && bar4) bar4.style.background = COLOR_STRONG;
+
+      // update textual label and meter class (optional)
+      let label = '—';
+      meter.classList.remove('weak','fair','good','strong');
+      if (s <= 1) { label = 'Weak'; strengthText.style.color = COLOR_WEAK; meter.classList.add('weak'); }
+      else if (s === 2) { label = 'Fair'; strengthText.style.color = COLOR_FAIR; meter.classList.add('fair'); }
+      else if (s === 3) { label = 'Good'; strengthText.style.color = COLOR_GOOD; meter.classList.add('good'); }
+      else if (s === 4) { label = 'Strong'; strengthText.style.color = COLOR_STRONG; meter.classList.add('strong'); }
+
+      strengthText.textContent = label;
+      return s;
+    }
+
+    // show/hide both password fields using checkbox
+    if (showPasswords) {
+      showPasswords.addEventListener('change', () => {
+        const t = showPasswords.checked ? 'text' : 'password';
+        if (pwd) pwd.setAttribute('type', t);
+        if (confirm) confirm.setAttribute('type', t);
       });
     }
+
+    // live strength update
+    if (pwd) {
+      pwd.addEventListener('input', () => {
+        const score = updateStrengthUI(pwd.value);
+        if (pwdError && pwdError.style.display !== 'none') pwdError.style.display = 'none';
+        if (confirm && pwd.value === confirm.value && pwdError) { pwdError.style.display = 'none'; }
+      });
+    }
+
+    if (confirm) {
+      confirm.addEventListener('input', () => {
+        if (pwdError && pwdError.style.display !== 'none') pwdError.style.display = 'none';
+      });
+    }
+
+    signupForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const first = fName ? fName.value.trim() : '';
+      const last = lName ? lName.value.trim() : '';
+      const em = email ? email.value.trim() : '';
+      const pw = pwd ? pwd.value : '';
+      const conf = confirm ? confirm.value : '';
+
+      if (!first) { alert('Please enter your first name.'); if (fName) fName.focus(); return; }
+      if (!last) { alert('Please enter your last name.'); if (lName) lName.focus(); return; }
+
+      if (!em) {
+        if (emailError) { emailError.style.display = 'block'; emailError.textContent = 'Email is required.'; }
+        else alert('Please enter your email address.');
+        if (email) email.focus();
+        return;
+      }
+
+      if (!isValidEmail(em)) {
+        if (emailError) { emailError.style.display = 'block'; emailError.textContent = 'Please enter a valid email address (e.g. user@domain.com).'; }
+        else alert('Please enter a valid email address.');
+        if (email) email.focus();
+        return;
+      } else if (emailError) {
+        emailError.style.display = 'none';
+      }
+
+      // password checks
+      if (!pw || pw.length < 6) {
+        if (pwdError) { pwdError.style.display = 'block'; pwdError.textContent = 'Password must be at least 6 characters.'; }
+        else alert('Password must be at least 6 characters.');
+        if (pwd) pwd.focus();
+        return;
+      }
+
+      const score = passwordScore(pw);
+      // require Good -> score >=3
+      if (score < 3) {
+        if (pwdError) { pwdError.style.display = 'block'; pwdError.textContent = 'Password strength is not good enough. Make it stronger (uppercase, lowercase, digit or symbol).'; }
+        else alert('Password strength is not good enough.');
+        if (pwd) pwd.focus();
+        updateStrengthUI(pw);
+        return;
+      }
+
+      if (pw !== conf) {
+        if (pwdError) { pwdError.style.display = 'block'; pwdError.textContent = 'Passwords do not match.'; }
+        else alert('Passwords do not match.');
+        if (confirm) confirm.focus();
+        return;
+      } else if (pwdError) {
+        pwdError.style.display = 'none';
+      }
+
+      // create account: store profile and sign-in
+      auth.setProfile({ firstName: first, lastName: last, email: em });
+      auth.login(em);
+
+      // redirect to dashboard
+      window.location.href = 'dashboard.html';
+    });
   }
 
   setupSettingsForm() {
@@ -447,7 +727,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
-
 
 // Make auth available globally for inline event handlers
 window.auth = auth;
