@@ -407,7 +407,10 @@ class FormManager {
     const passwordFieldWrapper = document.querySelector('#passwordFieldWrapper');
     const emailError = document.querySelector('#emailError');
     const emailDisplay = document.querySelector('#emailDisplay');
-    const authLinks = document.querySelector('#authLinks');
+
+    // NEW: two separate auth link containers
+    const authLinksEmail = document.querySelector('#authLinksEmail'); // shown only during email stage
+    const authLinksFull = document.querySelector('#authLinksFull');   // shown only during password stage
     const loginLabel = document.querySelector('#login-label');
     const useDifferentEmail = document.querySelector('#useDifferentEmail');
 
@@ -455,15 +458,20 @@ class FormManager {
         passwordFieldWrapper.style.display = 'block';
         setTimeout(() => showElement(passwordFieldWrapper), 20);
       }
-      // keep authLinks visible (user requested it to be present during email stage as well)
-      if (authLinks) {
-        authLinks.style.display = 'block';
-        setTimeout(() => {
-          authLinks.classList.remove('animated-hidden');
-          authLinks.classList.add('swipe-up-in');
-        }, 20);
-        authLinks.setAttribute('aria-hidden', 'false');
+
+      // SHOW full auth links (forgot + use diff + signup)
+      if (authLinksEmail) {
+        // hide the simple email-only links
+        authLinksEmail.style.display = 'none';
+        authLinksEmail.setAttribute('aria-hidden', 'true');
       }
+      if (authLinksFull) {
+        authLinksFull.style.display = 'block';
+        authLinksFull.classList.remove('animated-hidden');
+        authLinksFull.setAttribute('aria-hidden', 'false');
+        setTimeout(() => authLinksFull.classList.add('swipe-up-in'), 10);
+      }
+
       if (loginLabel) loginLabel.textContent = 'Enter your password:';
       setTimeout(() => { if (passwordInput) passwordInput.focus(); }, 420);
     }
@@ -477,7 +485,8 @@ class FormManager {
       } else {
         if (emailFieldWrapper) { emailFieldWrapper.style.display = 'block'; setTimeout(() => showElement(emailFieldWrapper), 20); }
       }
-      // IMPORTANT: keep authLinks visible when returning to email stage (user requested)
+
+      // hide email preview
       if (emailDisplay) {
         emailDisplay.classList.remove('swipe-up-in');
         emailDisplay.classList.add('swipe-up-out');
@@ -488,15 +497,39 @@ class FormManager {
           emailDisplay.removeEventListener('animationend', hidePreview);
         });
       }
+
+      // SHOW only the simple signup line, hide the full auth links
+      if (authLinksFull) {
+        authLinksFull.classList.remove('swipe-up-in');
+        authLinksFull.classList.add('swipe-up-out');
+        authLinksFull.addEventListener('animationend', function hideFull() {
+          authLinksFull.style.display = 'none';
+          authLinksFull.classList.add('animated-hidden');
+          authLinksFull.classList.remove('swipe-up-out');
+          authLinksFull.removeEventListener('animationend', hideFull);
+        });
+        authLinksFull.setAttribute('aria-hidden', 'true');
+      }
+      if (authLinksEmail) {
+        authLinksEmail.style.display = 'block';
+        authLinksEmail.classList.remove('animated-hidden');
+        authLinksEmail.setAttribute('aria-hidden', 'false');
+      }
+
       if (loginLabel) loginLabel.textContent = 'Enter your email address to sign in:';
       setTimeout(() => { if (emailInput) emailInput.focus(); }, 300);
     }
 
-    // Make authLinks visible from the start (so "Don't have account? Signup" shows during email stage)
-    if (authLinks) {
-      authLinks.style.display = 'block';
-      authLinks.classList.remove('animated-hidden');
-      authLinks.setAttribute('aria-hidden', 'false');
+    // INITIAL STATE: show only simple signup line (authLinksEmail) and hide full links
+    if (authLinksEmail) {
+      authLinksEmail.style.display = 'block';
+      authLinksEmail.classList.remove('animated-hidden');
+      authLinksEmail.setAttribute('aria-hidden', 'false');
+    }
+    if (authLinksFull) {
+      authLinksFull.style.display = 'none';
+      authLinksFull.classList.add('animated-hidden');
+      authLinksFull.setAttribute('aria-hidden', 'true');
     }
 
     if (useDifferentEmail) {

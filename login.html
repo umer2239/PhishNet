@@ -10,6 +10,21 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@400;500;600;700;800;900&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+
+  <style>
+    /* small auth links style to match "Use different email" */
+    .auth-small {
+      font-size: 0.875rem; /* slightly smaller */
+      line-height: 1;
+      vertical-align: middle;
+    }
+
+    /* ensure spacing between small links */
+    #authLinksFull a,
+    #authLinksEmail a {
+      text-decoration: underline;
+    }
+  </style>
 </head>
 <body class="login-page">
   <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -42,7 +57,6 @@
         </div>
 
         <div class="login-features">
-
           <div class="login-feature-item">
             <svg class="login-feature-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -77,18 +91,15 @@
             </svg>
             <span>Immediate Security Alerts and Notification Delivery</span>
           </div>
-
         </div>
 
         <div class="login-form-section">
-
           <form id="login-form" novalidate>
             <label id="login-label" class="login-form-label">Enter your email address to sign in:</label>
 
             <div id="emailDisplay" class="email-display animated-hidden" aria-hidden="true"></div>
 
             <div class="login-input-group" id="inputRow" style="display:flex;gap:0.5rem;align-items:center;">
-
               <div id="emailFieldWrapper" style="flex:1;">
                 <input
                   type="email"
@@ -115,18 +126,23 @@
               <div id="signinBtnWrapper">
                 <button type="submit" class="btn btn-primary" id="signin-button">Sign In</button>
               </div>
-
             </div>
 
-            <!-- 🔥 UPDATED SECTION (your replacement applied) -->
-            <div id="authLinks" class="animated-hidden" aria-hidden="true" style="margin-top:0.75rem;">
-              <a href="forgot-password.html" id="forgot-password-link">Forgot Password?</a>
-              <span style="margin-left:1rem;"><a href="#" id="useDifferentEmail">Use different email</a></span>
-              <div style="margin-top: 0.5rem;">
+            <!-- EMAIL STAGE: only signup line visible -->
+            <div id="authLinksEmail" aria-hidden="false" style="margin-top:0.75rem;">
+              <div class="auth-small">
                 Don't have Account? <a href="signup.html" id="signup-link">Signup.</a>
               </div>
             </div>
-            <!-- END UPDATED SECTION -->
+
+            <!-- PASSWORD STAGE: full links; "Forgot Password?" now has auth-small class -->
+            <div id="authLinksFull" class="animated-hidden" aria-hidden="true" style="margin-top:0.75rem; display:none;">
+              <a href="forgot-password.html" id="forgot-password-link" class="auth-small">Forgot Password?</a>
+              <span style="margin-left:1rem;"><a href="#" id="useDifferentEmail" class="auth-small">Use different email</a></span>
+              <div style="margin-top: 0.5rem;" class="auth-small">
+                Don't have Account? <a href="signup.html" id="signup-link-2">Signup.</a>
+              </div>
+            </div>
 
           </form>
 
@@ -138,6 +154,7 @@
       </div>
     </section>
   </main>
+
 <footer>
     <div class="footer-grid">
       <div class="footer-section">
@@ -184,6 +201,7 @@
       © 2025 PhishNet. All rights reserved.
     </div>
   </footer>
+
   <script src="app.js"></script>
 </body>
 </html>
