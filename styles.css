@@ -2630,3 +2630,68 @@ table tbody tr:hover {
   box-shadow: 0 0 60px rgba(0, 183, 217, 0.3), 0 0 5px var(--accent-cyan);
   border-color: var(--accent-cyan);
 }
+
+/* ==================== TOAST NOTIFICATION ==================== */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 16px 24px;
+  background: rgba(15, 15, 16, 0.95);
+  border: 1px solid var(--primary-blue);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 500;
+  z-index: 10000;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(400px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(11, 99, 217, 0.3);
+  backdrop-filter: blur(10px);
+  min-width: 300px;
+  max-width: 400px;
+}
+
+.toast-notification.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+
+.toast-notification.success {
+  border-color: var(--color-safe);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 255, 136, 0.3);
+}
+
+.toast-notification.error {
+  border-color: var(--color-malicious);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 77, 77, 0.3);
+}
+
+.toast-notification.warning {
+  border-color: var(--color-suspicious);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 193, 7, 0.3);
+}
+
+.toast-notification.info {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 183, 217, 0.3);
+}
+
+/* Mobile responsive toast */
+@media (max-width: 768px) {
+  .toast-notification {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    min-width: auto;
+    max-width: none;
+    transform: translateY(-100px);
+  }
+  
+  .toast-notification.show {
+    transform: translateY(0);
+  }
+}

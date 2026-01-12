@@ -1,3 +1,41 @@
+// ==================== TOAST NOTIFICATION SYSTEM ====================
+let toastElement = null;
+let toastTimeout = null;
+
+function showToast(message, type = 'info', duration = 3000) {
+  // Create toast element if it doesn't exist
+  if (!toastElement) {
+    toastElement = document.createElement('div');
+    toastElement.className = 'toast-notification';
+    document.body.appendChild(toastElement);
+  }
+
+  // Clear any existing timeout
+  if (toastTimeout) {
+    clearTimeout(toastTimeout);
+  }
+
+  // Remove all type classes
+  toastElement.classList.remove('success', 'error', 'warning', 'info', 'show');
+  
+  // Set message and type
+  toastElement.textContent = message;
+  toastElement.classList.add(type);
+  
+  // Trigger reflow to restart animation
+  void toastElement.offsetWidth;
+  
+  // Show toast
+  setTimeout(() => {
+    toastElement.classList.add('show');
+  }, 10);
+
+  // Hide after duration
+  toastTimeout = setTimeout(() => {
+    toastElement.classList.remove('show');
+  }, duration);
+}
+
 // ==================== LOGIN STATE MANAGEMENT ====================
 // Prevent dashboard button flash for logged-in users
 if (localStorage.getItem('pishnet_user')) {
@@ -11,22 +49,44 @@ class AuthManager {
   }
 
   isLoggedIn() {
-    return localStorage.getItem(this.storageKey) !== null;
+    // Check if we have a valid token
+    return apiService.isAuthenticated() && localStorage.getItem(this.storageKey) !== null;
   }
 
-  login(email) {
-    const user = {
-      email: email,
-      initials: this.getInitials(email),
-      loginTime: new Date().toISOString()
-    };
-    localStorage.setItem(this.storageKey, JSON.stringify(user));
-    return user;
+  async login(email, password) {
+    try {
+      const response = await apiService.login({ email, password });
+      
+      if (response.success) {
+        const user = {
+          email: response.user.email,
+          firstName: response.user.firstName,
+          lastName: response.user.lastName,
+          initials: this.getInitials(response.user.email, response.user.firstName, response.user.lastName),
+          loginTime: new Date().toISOString()
+        };
+        localStorage.setItem(this.storageKey, JSON.stringify(user));
+        // Also set as pishnet_user for backward compatibility
+        localStorage.setItem('pishnet_user', JSON.stringify(user));
+        return user;
+      }
+      throw new Error(response.message || 'Login failed');
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
   }
 
-  logout() {
-    localStorage.removeItem(this.storageKey);
-    window.location.href = 'index.html';
+  async logout() {
+    try {
+      await apiService.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem(this.storageKey);
+      localStorage.removeItem('pishnet_user');
+      window.location.href = 'index.html';
+    }
   }
 
   getUser() {
@@ -34,7 +94,13 @@ class AuthManager {
     return userData ? JSON.parse(userData) : null;
   }
 
-  getInitials(email) {
+  getInitials(email, firstName, lastName) {
+    if (firstName && lastName) {
+      return (firstName[0] + lastName[0]).toUpperCase();
+    }
+    if (firstName) {
+      return firstName.substring(0, 2).toUpperCase();
+    }
     const name = (email || '').split('@')[0];
     const parts = name.split(/[._-]/);
     if (parts.length >= 2) {
@@ -43,11 +109,23 @@ class AuthManager {
     return (name.substring(0, 2) || '').toUpperCase();
   }
 
-  setProfile(profile) {
+  async setProfile(profile) {
     // profile: {firstName, lastName, email}
-    const user = Object.assign({}, this.getUser() || {}, profile);
-    if (profile.email) user.initials = this.getInitials(profile.email);
-    localStorage.setItem(this.storageKey, JSON.stringify(user));
+    try {
+      if (this.isLoggedIn()) {
+        // Update profile on backend
+        await apiService.updateProfile(profile);
+      }
+      const user = Object.assign({}, this.getUser() || {}, profile);
+      if (profile.firstName || profile.lastName) {
+        user.initials = this.getInitials(profile.email || user.email, profile.firstName, profile.lastName);
+      }
+      localStorage.setItem(this.storageKey, JSON.stringify(user));
+      localStorage.setItem('pishnet_user', JSON.stringify(user));
+    } catch (error) {
+      console.error('Profile update error:', error);
+      throw error;
+    }
   }
 
   getScanCount() {
@@ -62,6 +140,29 @@ class AuthManager {
 
   canScanAsGuest() {
     return this.getScanCount() === 0;
+  }
+
+  async register(userData) {
+    try {
+      const response = await apiService.register(userData);
+      
+      if (response.success) {
+        const user = {
+          email: response.user.email,
+          firstName: response.user.firstName,
+          lastName: response.user.lastName,
+          initials: this.getInitials(response.user.email, response.user.firstName, response.user.lastName),
+          loginTime: new Date().toISOString()
+        };
+        localStorage.setItem(this.storageKey, JSON.stringify(user));
+        localStorage.setItem('pishnet_user', JSON.stringify(user));
+        return user;
+      }
+      throw new Error(response.message || 'Registration failed');
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw error;
+    }
   }
 }
 
@@ -284,7 +385,7 @@ class ScanManager {
     });
   }
 
-  handleScan(input, type) {
+  async handleScan(input, type) {
     const value = input.value.trim();
 
     if (!value) {
@@ -301,18 +402,44 @@ class ScanManager {
       return;
     }
 
-    // Simulate scan
+    // Show scanning notification
     this.showNotification('Scanning ' + type + '...', 'info');
 
-    setTimeout(() => {
-      const result = this.simulateScan(value, type);
+    try {
+      let result;
+      
+      // If logged in, use backend API
+      if (auth.isLoggedIn()) {
+        const scanData = type === 'url' ? { url: value } : { emailContent: value };
+        const response = await apiService.createScan(scanData);
+        
+        if (response.success) {
+          result = {
+            type,
+            value,
+            threat: response.scan.threatLevel,
+            confidence: response.scan.confidence,
+            timestamp: response.scan.createdAt,
+            indicators: response.scan.threatIndicators || this.getIndicators(response.scan.threatLevel)
+          };
+        } else {
+          throw new Error('Scan failed');
+        }
+      } else {
+        // Guest mode - simulate scan
+        result = this.simulateScan(value, type);
+      }
+      
       auth.incrementScanCount();
       this.showScanResult(result);
-    }, 1500);
+    } catch (error) {
+      console.error('Scan error:', error);
+      this.showNotification('Scan failed. Please try again.', 'error');
+    }
   }
 
   simulateScan(value, type) {
-    // Simulate AI scan with random but realistic results
+    // Simulate AI scan with random but realistic results (for guest users)
     const threats = ['safe', 'suspicious', 'malicious'];
     const threat = threats[Math.floor(Math.random() * threats.length)];
     const confidence = threat === 'safe' ? 70 + Math.random() * 30 : 60 + Math.random() * 40;
@@ -543,12 +670,12 @@ class FormManager {
 
       if (!passwordStage) {
         if (!emailVal) {
-          if (emailError) { emailError.style.display = 'block'; emailError.textContent = 'Email is required.'; } else alert('Please enter your email address.');
+          if (emailError) { emailError.style.display = 'block'; emailError.textContent = 'Email is required.'; } else showToast('Please enter your email address', 'error');
           if (emailInput) emailInput.focus();
           return;
         }
         if (!isValidEmail(emailVal)) {
-          if (emailError) { emailError.style.display = 'block'; emailError.textContent = 'Please enter a valid email address (example: user@domain.com).'; } else alert('Please enter a valid email address.');
+          if (emailError) { emailError.style.display = 'block'; emailError.textContent = 'Please enter a valid email address (example: user@domain.com).'; } else showToast('Please enter a valid email address', 'error');
           if (emailInput) emailInput.focus();
           return;
         }
@@ -558,14 +685,21 @@ class FormManager {
       }
 
       if (!pwdVal) {
-        alert('Please enter your password.');
+        showToast('Please enter your password', 'error');
         if (passwordInput) passwordInput.focus();
         return;
       }
 
+      // Attempt login with backend API
       const finalEmail = emailVal || (emailDisplay ? emailDisplay.textContent : '');
-      auth.login(finalEmail);
-      window.location.href = 'dashboard.html';
+      auth.login(finalEmail, pwdVal)
+        .then(() => {
+          window.location.href = 'dashboard.html';
+        })
+        .catch((error) => {
+          showToast(error.message || 'Login failed. Please check your credentials', 'error');
+          if (passwordInput) passwordInput.focus();
+        });
     });
 
     if (emailInput) {
@@ -680,19 +814,19 @@ class FormManager {
       const pw = pwd ? pwd.value : '';
       const conf = confirm ? confirm.value : '';
 
-      if (!first) { alert('Please enter your first name.'); if (fName) fName.focus(); return; }
-      if (!last) { alert('Please enter your last name.'); if (lName) lName.focus(); return; }
+      if (!first) { showToast('Please enter your first name', 'error'); if (fName) fName.focus(); return; }
+      if (!last) { showToast('Please enter your last name', 'error'); if (lName) lName.focus(); return; }
 
       if (!em) {
         if (emailError) { emailError.style.display = 'block'; emailError.textContent = 'Email is required.'; }
-        else alert('Please enter your email address.');
+        else showToast('Please enter your email address', 'error');
         if (email) email.focus();
         return;
       }
 
       if (!isValidEmail(em)) {
         if (emailError) { emailError.style.display = 'block'; emailError.textContent = 'Please enter a valid email address (e.g. user@domain.com).'; }
-        else alert('Please enter a valid email address.');
+        else showToast('Please enter a valid email address', 'error');
         if (email) email.focus();
         return;
       } else if (emailError) {
@@ -702,7 +836,7 @@ class FormManager {
       // password checks
       if (!pw || pw.length < 6) {
         if (pwdError) { pwdError.style.display = 'block'; pwdError.textContent = 'Password must be at least 6 characters.'; }
-        else alert('Password must be at least 6 characters.');
+        else showToast('Password must be at least 6 characters', 'error');
         if (pwd) pwd.focus();
         return;
       }
@@ -711,7 +845,7 @@ class FormManager {
       // require Good -> score >=3
       if (score < 3) {
         if (pwdError) { pwdError.style.display = 'block'; pwdError.textContent = 'Password strength is not good enough. Make it stronger (uppercase, lowercase, digit or symbol).'; }
-        else alert('Password strength is not good enough.');
+        else showToast('Password is not strong enough', 'error');
         if (pwd) pwd.focus();
         updateStrengthUI(pw);
         return;
@@ -719,19 +853,33 @@ class FormManager {
 
       if (pw !== conf) {
         if (pwdError) { pwdError.style.display = 'block'; pwdError.textContent = 'Passwords do not match.'; }
-        else alert('Passwords do not match.');
+        else showToast('Passwords do not match', 'error');
         if (confirm) confirm.focus();
         return;
       } else if (pwdError) {
         pwdError.style.display = 'none';
       }
 
-      // create account: store profile and sign-in
-      auth.setProfile({ firstName: first, lastName: last, email: em });
-      auth.login(em);
-
-      // redirect to dashboard
-      window.location.href = 'dashboard.html';
+      // Register with backend API
+      auth.register({
+        firstName: first,
+        lastName: last,
+        email: em,
+        password: pw,
+        confirmPassword: conf
+      })
+      .then(() => {
+        // redirect to dashboard on successful registration
+        window.location.href = 'dashboard.html';
+      })
+      .catch((error) => {
+        if (emailError) {
+          emailError.style.display = 'block';
+          emailError.textContent = error.message || 'Registration failed. Please try again.';
+        } else {
+          showToast(error.message || 'Registration failed. Please try again', 'error');
+        }
+      });
     });
   }
 
@@ -740,7 +888,7 @@ class FormManager {
     if (settingsForm) {
       settingsForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        alert('Settings saved successfully! (Demo mode - changes not persisted)');
+        showToast('Settings saved successfully! (Demo mode)', 'success');
       });
     }
   }
