@@ -3,7 +3,7 @@
 
 class APIService {
   constructor() {
-    this.baseURL = 'http://localhost:5000/api/v1';
+    this.baseURL = 'https://backend-phishnet.onrender.com/api/v1';
     this.tokenKey = 'phishnet_token';
   }
 
