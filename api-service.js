@@ -196,3 +196,6 @@ class APIService {
 
 // Create and export singleton instance
 const apiService = new APIService();
+
+// Make it globally available for app.js
+window.apiService = apiService;
