@@ -82,4 +82,7 @@ Contributions are welcome! Please follow these steps:
 * **Email**: umerhashmi265@gmail.com
 
 ---
+<<<<<<< HEAD
 
+=======
+>>>>>>> 14b2df58ca812d846a106dff30d47b0972dab681
