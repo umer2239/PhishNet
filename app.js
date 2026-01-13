@@ -36,12 +36,7 @@ function showToast(message, type = 'info', duration = 3000) {
   }, duration);
 }
 
-// ==================== LOGIN STATE MANAGEMENT ====================
-// Prevent dashboard button flash for logged-in users
-if (localStorage.getItem('pishnet_user')) {
-  document.body.classList.add('logged-in');
-}
-
+// ==================== SIMPLE DEMO AUTH MANAGER ====================
 class AuthManager {
   constructor() {
     this.storageKey = 'phishnet_user';
@@ -49,44 +44,31 @@ class AuthManager {
   }
 
   isLoggedIn() {
-    // Check if we have a valid token
-    return apiService.isAuthenticated() && localStorage.getItem(this.storageKey) !== null;
+    return localStorage.getItem(this.storageKey) !== null;
   }
 
-  async login(email, password) {
-    try {
-      const response = await apiService.login({ email, password });
-      
-      if (response.success) {
+  login(email, password) {
+    // Simple demo login - accepts any email/password
+    return new Promise((resolve) => {
+      setTimeout(() => {
         const user = {
-          email: response.user.email,
-          firstName: response.user.firstName,
-          lastName: response.user.lastName,
-          initials: this.getInitials(response.user.email, response.user.firstName, response.user.lastName),
+          email: email,
+          firstName: 'Demo',
+          lastName: 'User',
+          initials: this.getInitials(email, 'Demo', 'User'),
           loginTime: new Date().toISOString()
         };
         localStorage.setItem(this.storageKey, JSON.stringify(user));
-        // Also set as pishnet_user for backward compatibility
         localStorage.setItem('pishnet_user', JSON.stringify(user));
-        return user;
-      }
-      throw new Error(response.message || 'Login failed');
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    }
+        resolve(user);
+      }, 500);
+    });
   }
 
-  async logout() {
-    try {
-      await apiService.logout();
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      localStorage.removeItem(this.storageKey);
-      localStorage.removeItem('pishnet_user');
-      window.location.href = 'index.html';
-    }
+  logout() {
+    localStorage.removeItem(this.storageKey);
+    localStorage.removeItem('pishnet_user');
+    window.location.href = 'index.html';
   }
 
   getUser() {
@@ -109,23 +91,13 @@ class AuthManager {
     return (name.substring(0, 2) || '').toUpperCase();
   }
 
-  async setProfile(profile) {
-    // profile: {firstName, lastName, email}
-    try {
-      if (this.isLoggedIn()) {
-        // Update profile on backend
-        await apiService.updateProfile(profile);
-      }
-      const user = Object.assign({}, this.getUser() || {}, profile);
-      if (profile.firstName || profile.lastName) {
-        user.initials = this.getInitials(profile.email || user.email, profile.firstName, profile.lastName);
-      }
-      localStorage.setItem(this.storageKey, JSON.stringify(user));
-      localStorage.setItem('pishnet_user', JSON.stringify(user));
-    } catch (error) {
-      console.error('Profile update error:', error);
-      throw error;
+  setProfile(profile) {
+    const user = Object.assign({}, this.getUser() || {}, profile);
+    if (profile.firstName || profile.lastName) {
+      user.initials = this.getInitials(profile.email || user.email, profile.firstName, profile.lastName);
     }
+    localStorage.setItem(this.storageKey, JSON.stringify(user));
+    localStorage.setItem('pishnet_user', JSON.stringify(user));
   }
 
   getScanCount() {
@@ -142,31 +114,27 @@ class AuthManager {
     return this.getScanCount() === 0;
   }
 
-  async register(userData) {
-    try {
-      const response = await apiService.register(userData);
-      
-      if (response.success) {
+  register(userData) {
+    // Simple demo registration - accepts all data
+    return new Promise((resolve) => {
+      setTimeout(() => {
         const user = {
-          email: response.user.email,
-          firstName: response.user.firstName,
-          lastName: response.user.lastName,
-          initials: this.getInitials(response.user.email, response.user.firstName, response.user.lastName),
+          email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          initials: this.getInitials(userData.email, userData.firstName, userData.lastName),
           loginTime: new Date().toISOString()
         };
         localStorage.setItem(this.storageKey, JSON.stringify(user));
         localStorage.setItem('pishnet_user', JSON.stringify(user));
-        return user;
-      }
-      throw new Error(response.message || 'Registration failed');
-    } catch (error) {
-      console.error('Registration error:', error);
-      throw error;
-    }
+        resolve(user);
+      }, 500);
+    });
   }
 }
 
-const auth = new AuthManager();
+// Initialize AuthManager immediately
+window.auth = new AuthManager();
 
 // ==================== NAVIGATION MANAGEMENT ====================
 class NavigationManager {
@@ -181,7 +149,7 @@ class NavigationManager {
   }
 
   updateNavigation() {
-    const isLoggedIn = auth.isLoggedIn();
+    const isLoggedIn = window.auth.isLoggedIn();
 
     // Update navigation links
     const navLinks = document.querySelector('.nav-links');
@@ -203,16 +171,16 @@ class NavigationManager {
         authButtons.style.display = 'none';
         userAvatar.style.display = 'flex';
 
-        const user = auth.getUser();
+        const user = window.auth.getUser();
         userAvatar.textContent = user.initials;
 
-        // Hide extra dashboard button (even on landing page)
+        // Hide extra dashboard button
         if (dashboardButton) dashboardButton.style.display = 'none';
       } else {
         authButtons.style.display = 'flex';
         userAvatar.style.display = 'none';
 
-        // Show dashboard button only for guests
+        // Show dashboard button for guests
         if (dashboardButton) dashboardButton.style.display = 'inline-flex';
       }
     }
@@ -220,12 +188,12 @@ class NavigationManager {
     // Apply logged-in class for global styling
     document.body.classList.toggle('logged-in', isLoggedIn);
 
-    // Safety check for landing page late load
+    // Safety check for landing page
     if (isLoggedIn && window.location.pathname.includes('index.html')) {
       setTimeout(() => {
         const landingDashboardBtn = document.querySelector('.btn-dashboard');
         if (landingDashboardBtn) landingDashboardBtn.style.display = 'none';
-      }, 300);
+      }, 100);
     }
   }
 
@@ -261,25 +229,27 @@ class NavigationManager {
     const navLinks = document.querySelector('.nav-links');
     const currentPage = window.location.pathname.split('/').pop() || 'index.html';
 
-    navLinks.innerHTML = `
-     <li><a href="pricing.html" ${currentPage === 'pricing.html' ? 'class="active"' : ''}>Pricing</a></li>
-     <li><a href="demo.html" ${currentPage === 'demo.html' ? 'class="active"' : ''}>Demo</a></li>
-      <li><a href="blog.html" ${currentPage === 'blog.html' ? 'class="active"' : ''}>Blog</a></li>
-      <li class="dropdown">
-        <a href="#" class="dropdown-toggle ${currentPage === 'about.html' || currentPage === 'faq.html' || currentPage === 'terms.html' || currentPage === 'privacy.html' ? 'active"' : ''}">
-          About
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 0.25rem;">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-        </a>
-        <ul class="dropdown-menu">
-          <li><a href="about.html">About Us</a></li>
-          <li><a href="faq.html">FAQs</a></li>
-          <li><a href="terms.html">Terms of Use</a></li>
-          <li><a href="privacy.html">Privacy Policy</a></li>
-        </ul>
-      </li>
-    `;
+    if (navLinks) {
+      navLinks.innerHTML = `
+       <li><a href="pricing.html" ${currentPage === 'pricing.html' ? 'class="active"' : ''}>Pricing</a></li>
+       <li><a href="demo.html" ${currentPage === 'demo.html' ? 'class="active"' : ''}>Demo</a></li>
+        <li><a href="blog.html" ${currentPage === 'blog.html' ? 'class="active"' : ''}>Blog</a></li>
+        <li class="dropdown">
+          <a href="#" class="dropdown-toggle ${currentPage === 'about.html' || currentPage === 'faq.html' || currentPage === 'terms.html' || currentPage === 'privacy.html' ? 'active' : ''}">
+            About
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 0.25rem;">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </a>
+          <ul class="dropdown-menu">
+            <li><a href="about.html">About Us</a></li>
+            <li><a href="faq.html">FAQs</a></li>
+            <li><a href="terms.html">Terms of Use</a></li>
+            <li><a href="privacy.html">Privacy Policy</a></li>
+          </ul>
+        </li>
+      `;
+    }
   }
 
   setupEventListeners() {
@@ -287,7 +257,7 @@ class NavigationManager {
     const dashboardButtons = document.querySelectorAll('.btn-dashboard, [href="dashboard.html"]');
     dashboardButtons.forEach(btn => {
       btn.addEventListener('click', (e) => {
-        if (!auth.isLoggedIn()) {
+        if (!window.auth.isLoggedIn()) {
           e.preventDefault();
           window.location.href = 'login.html';
         }
@@ -327,9 +297,9 @@ class NavigationManager {
     menu.className = 'profile-menu';
     menu.innerHTML = `
       <div class="profile-menu-header">
-        <div class="profile-menu-avatar">${auth.getUser().initials}</div>
+        <div class="profile-menu-avatar">${window.auth.getUser().initials}</div>
         <div class="profile-menu-info">
-          <div class="profile-menu-email">${auth.getUser().email}</div>
+          <div class="profile-menu-email">${window.auth.getUser().email}</div>
         </div>
       </div>
       <div class="profile-menu-divider"></div>
@@ -340,7 +310,7 @@ class NavigationManager {
         </svg>
         Settings
       </a>
-      <button class="profile-menu-item" onclick="auth.logout()">
+      <button class="profile-menu-item" onclick="window.auth.logout()">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
           <polyline points="16 17 21 12 16 7"/>
@@ -385,7 +355,7 @@ class ScanManager {
     });
   }
 
-  async handleScan(input, type) {
+  handleScan(input, type) {
     const value = input.value.trim();
 
     if (!value) {
@@ -393,7 +363,7 @@ class ScanManager {
       return;
     }
 
-    // Check if guest can scan - redirect to login if scan limit reached
+    // Check if guest can scan
     if (!auth.isLoggedIn() && !auth.canScanAsGuest()) {
       this.showNotification('Login to continue scanning', 'warning');
       setTimeout(() => {
@@ -405,41 +375,16 @@ class ScanManager {
     // Show scanning notification
     this.showNotification('Scanning ' + type + '...', 'info');
 
-    try {
-      let result;
-      
-      // If logged in, use backend API
-      if (auth.isLoggedIn()) {
-        const scanData = type === 'url' ? { url: value } : { emailContent: value };
-        const response = await apiService.createScan(scanData);
-        
-        if (response.success) {
-          result = {
-            type,
-            value,
-            threat: response.scan.threatLevel,
-            confidence: response.scan.confidence,
-            timestamp: response.scan.createdAt,
-            indicators: response.scan.threatIndicators || this.getIndicators(response.scan.threatLevel)
-          };
-        } else {
-          throw new Error('Scan failed');
-        }
-      } else {
-        // Guest mode - simulate scan
-        result = this.simulateScan(value, type);
-      }
-      
+    // Simulate scan
+    setTimeout(() => {
+      const result = this.simulateScan(value, type);
       auth.incrementScanCount();
       this.showScanResult(result);
-    } catch (error) {
-      console.error('Scan error:', error);
-      this.showNotification('Scan failed. Please try again.', 'error');
-    }
+    }, 1000);
   }
 
   simulateScan(value, type) {
-    // Simulate AI scan with random but realistic results (for guest users)
+    // Simple demo scan with random results
     const threats = ['safe', 'suspicious', 'malicious'];
     const threat = threats[Math.floor(Math.random() * threats.length)];
     const confidence = threat === 'safe' ? 70 + Math.random() * 30 : 60 + Math.random() * 40;
@@ -535,6 +480,9 @@ class FormManager {
     const emailError = document.querySelector('#emailError');
     const emailDisplay = document.querySelector('#emailDisplay');
 
+    // Password toggle
+    const loginPwToggle = document.querySelector('#loginPwToggle');
+
     // NEW: two separate auth link containers
     const authLinksEmail = document.querySelector('#authLinksEmail'); // shown only during email stage
     const authLinksFull = document.querySelector('#authLinksFull');   // shown only during password stage
@@ -600,7 +548,7 @@ class FormManager {
       }
 
       if (loginLabel) loginLabel.textContent = 'Enter your password:';
-      setTimeout(() => { if (passwordInput) passwordInput.focus(); }, 420);
+      setTimeout(() => { if (passwordInput) passwordInput.focus(); }, 50);
     }
 
     function backToEmailStage() {
@@ -690,13 +638,27 @@ class FormManager {
         return;
       }
 
-      // Attempt login with backend API
+      // Attempt login
       const finalEmail = emailVal || (emailDisplay ? emailDisplay.textContent : '');
+      
+      const submitBtn = loginForm.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Signing in...';
+      }
+
       auth.login(finalEmail, pwdVal)
         .then(() => {
-          window.location.href = 'dashboard.html';
+          showToast('Login successful!', 'success');
+          setTimeout(() => {
+            window.location.href = 'dashboard.html';
+          }, 500);
         })
         .catch((error) => {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Continue';
+          }
           showToast(error.message || 'Login failed. Please check your credentials', 'error');
           if (passwordInput) passwordInput.focus();
         });
@@ -704,6 +666,15 @@ class FormManager {
 
     if (emailInput) {
       emailInput.addEventListener('input', () => { if (emailError && emailError.style.display !== 'none') emailError.style.display = 'none'; });
+    }
+
+    // Password toggle functionality
+    if (loginPwToggle && passwordInput) {
+      loginPwToggle.addEventListener('click', () => {
+        const isPassword = passwordInput.type === 'password';
+        passwordInput.type = isPassword ? 'text' : 'password';
+        loginPwToggle.classList.toggle('active', !isPassword);
+      });
     }
   }
 
@@ -715,6 +686,10 @@ class FormManager {
     const fName = document.querySelector('#firstName');
     const lName = document.querySelector('#lastName');
     const email = document.querySelector('#signup-email');
+    const phone = document.querySelector('#phone');
+    const company = document.querySelector('#company');
+    const securityQuestion = document.querySelector('#securityQuestion');
+    const securityAnswer = document.querySelector('#securityAnswer');
     const pwd = document.querySelector('#signup-password');
     const confirm = document.querySelector('#signup-confirm');
     const emailError = document.querySelector('#signupEmailError');
@@ -728,8 +703,9 @@ class FormManager {
     const strengthText = document.getElementById('pwdStrength');
     const meter = document.getElementById('pwdMeter');
 
-    // show passwords checkbox
-    const showPasswords = document.getElementById('showPasswords');
+    // password toggles
+    const signupPwToggle = document.getElementById('signupPwToggle');
+    const signupConfirmPwToggle = document.getElementById('signupConfirmPwToggle');
 
     function isValidEmail(value) {
       const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -781,12 +757,19 @@ class FormManager {
       return s;
     }
 
-    // show/hide both password fields using checkbox
-    if (showPasswords) {
-      showPasswords.addEventListener('change', () => {
-        const t = showPasswords.checked ? 'text' : 'password';
-        if (pwd) pwd.setAttribute('type', t);
-        if (confirm) confirm.setAttribute('type', t);
+    // password toggle functionality
+    if (signupPwToggle && pwd) {
+      signupPwToggle.addEventListener('click', () => {
+        const isPassword = pwd.type === 'password';
+        pwd.type = isPassword ? 'text' : 'password';
+        signupPwToggle.classList.toggle('active', !isPassword);
+      });
+    }
+    if (signupConfirmPwToggle && confirm) {
+      signupConfirmPwToggle.addEventListener('click', () => {
+        const isPassword = confirm.type === 'password';
+        confirm.type = isPassword ? 'text' : 'password';
+        signupConfirmPwToggle.classList.toggle('active', !isPassword);
       });
     }
 
@@ -811,6 +794,10 @@ class FormManager {
       const first = fName ? fName.value.trim() : '';
       const last = lName ? lName.value.trim() : '';
       const em = email ? email.value.trim() : '';
+      const ph = phone ? phone.value.trim() : '';
+      const comp = company ? company.value.trim() : '';
+      const secQ = securityQuestion ? securityQuestion.value : '';
+      const secA = securityAnswer ? securityAnswer.value.trim() : '';
       const pw = pwd ? pwd.value : '';
       const conf = confirm ? confirm.value : '';
 
@@ -832,6 +819,9 @@ class FormManager {
       } else if (emailError) {
         emailError.style.display = 'none';
       }
+
+      if (!secQ) { showToast('Please select a security question', 'error'); if (securityQuestion) securityQuestion.focus(); return; }
+      if (!secA) { showToast('Please provide an answer to the security question', 'error'); if (securityAnswer) securityAnswer.focus(); return; }
 
       // password checks
       if (!pw || pw.length < 6) {
@@ -860,19 +850,35 @@ class FormManager {
         pwdError.style.display = 'none';
       }
 
-      // Register with backend API
+      // Register new user (demo mode)
+      const submitBtn = signupForm.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating account...';
+      }
+
       auth.register({
         firstName: first,
         lastName: last,
         email: em,
+        phone: ph,
+        company: comp,
+        securityQuestion: secQ,
+        securityAnswer: secA,
         password: pw,
         confirmPassword: conf
       })
       .then(() => {
-        // redirect to dashboard on successful registration
-        window.location.href = 'dashboard.html';
+        showToast('Account created successfully!', 'success');
+        setTimeout(() => {
+          window.location.href = 'dashboard.html';
+        }, 500);
       })
       .catch((error) => {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Create Account';
+        }
         if (emailError) {
           emailError.style.display = 'block';
           emailError.textContent = error.message || 'Registration failed. Please try again.';
@@ -909,9 +915,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// Make auth available globally for inline event handlers
-window.auth = auth;
-// ==================== HERO TYPEWRITER (ALWAYS RUN) ====================
+// ==================== HERO TYPEWRITER ====================
 (function() {
   try {
     const path = window.location.pathname.split('/').pop();

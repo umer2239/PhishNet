@@ -113,14 +113,22 @@
               </div>
 
               <div id="passwordFieldWrapper" class="animated-hidden" style="flex:1;">
-                <input
-                  type="password"
-                  id="password"
-                  class="form-input"
-                  placeholder="Enter your password"
-                  autocomplete="current-password"
-                  required
-                />
+                <div class="input-with-toggle">
+                  <input
+                    type="password"
+                    id="password"
+                    class="form-input password-field"
+                    placeholder="Enter your password"
+                    autocomplete="current-password"
+                    required
+                  />
+                  <button type="button" class="pw-toggle" id="loginPwToggle" aria-label="Toggle password visibility">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
 
               <div id="signinBtnWrapper">
