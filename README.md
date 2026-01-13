@@ -82,9 +82,3 @@ Contributions are welcome! Please follow these steps:
 * **Email**: umerhashmi265@gmail.com
 
 ---
-
-## Screenshots
-
-![Landing Page](Landingpage.jpg)
-![Dashboard](Dashboard.jpg)
-*Dashboard and analytics view*
