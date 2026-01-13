@@ -83,8 +83,3 @@ Contributions are welcome! Please follow these steps:
 
 ---
 
-## Screenshots
-
-![Landing Page](Landingpage.jpg)
-![Dashboard](Dashboard.jpg)
-*Dashboard and analytics view*
