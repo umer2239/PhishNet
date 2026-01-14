@@ -247,8 +247,15 @@
               <div class="card-header">
                 <h3 class="card-title">Threat Overview (Last 7 Days)</h3>
               </div>
-              <div style="padding-top: 1rem;">
-                <canvas id="threatChart" style="max-height: 300px;"></canvas>
+              <div style="padding-top: 1rem; position: relative; height: 320px;">
+                <canvas id="threatChart"></canvas>
+              </div>
+              <div style="margin-top: 1rem; padding: 0 1rem; color: #CCCCCC; font-size: 0.9rem; text-align: center;">
+                <div style="display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; padding-top: 0.5rem;">
+                  <div><span class="legend-circle" style="background: #FF4D4D; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle;"></span>Malicious Links</div>
+                  <div><span class="legend-circle" style="background: #FFC107; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle;"></span>Suspicious Links</div>
+                  <div><span class="legend-circle" style="background: #00FF88; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle;"></span>Safe Links</div>
+                </div>
               </div>
             </div>
 
@@ -257,7 +264,7 @@
               <div class="card-header">
                 <h3 class="card-title">Recent Scans</h3>
               </div>
-              <div style="padding-top: 1rem; overflow-x: auto;">
+              <div style="padding-top: 1rem; overflow-x: auto;" class="recent-scans-table">
                 <table>
                   <thead>
                     <tr>
@@ -367,75 +374,7 @@
     </div>
   </footer>
 
-  <script src="api-service.js"></script>
   <script src="app.js"></script>
-  <script>
-    // Chart configuration with circular legend indicators
-    const ctx = document.getElementById('threatChart');
-    if (ctx) {
-      new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: ['Jan 4', 'Jan 5', 'Jan 6', 'Jan 7', 'Jan 8', 'Jan 9', 'Jan 10'],
-          datasets: [{
-            label: 'Malicious',
-            data: [12, 15, 8, 14, 11, 13, 16],
-            borderColor: '#FF4D4D',
-            backgroundColor: 'rgba(255, 77, 77, 0.1)',
-            tension: 0.4
-          }, {
-            label: 'Suspicious',
-            data: [8, 10, 12, 9, 11, 10, 13],
-            borderColor: '#FFC107',
-            backgroundColor: 'rgba(255, 193, 7, 0.1)',
-            tension: 0.4
-          }, {
-            label: 'Safe',
-            data: [120, 135, 128, 142, 138, 145, 151],
-            borderColor: '#00FF88',
-            backgroundColor: 'rgba(0, 255, 136, 0.1)',
-            tension: 0.4
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: true,
-          plugins: {
-            legend: {
-              display: true,
-              position: 'bottom',
-              labels: {
-                color: '#FFFFFF',
-                padding: 15,
-                font: {
-                  size: 13
-                },
-                usePointStyle: true,
-                pointStyle: 'circle'
-              }
-            },
-            tooltip: {
-              backgroundColor: '#2A0000',
-              titleColor: '#FFFFFF',
-              bodyColor: '#999999',
-              borderColor: '#4A0000',
-              borderWidth: 1
-            }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: { color: '#999999' },
-              grid: { color: 'rgba(255, 255, 255, 0.1)' }
-            },
-            x: {
-              ticks: { color: '#999999' },
-              grid: { color: 'rgba(255, 255, 255, 0.1)' }
-            }
-          }
-        }
-      });
-    }
-  </script>
+  <script src="chart-init.js"></script>
 </body>
 </html>

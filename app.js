@@ -48,26 +48,52 @@ class AuthManager {
   }
 
   login(email, password) {
-    // Simple demo login - accepts any email/password
-    return new Promise((resolve) => {
-      setTimeout(() => {
+    // Call backend API to login user
+    return fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email,
+        password: password
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(error => {
+          throw new Error(error.message || 'Login failed');
+        });
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.success && data.data.token) {
+        // Store token and user info
+        localStorage.setItem('token', data.data.token);
         const user = {
-          email: email,
-          firstName: 'Demo',
-          lastName: 'User',
-          initials: this.getInitials(email, 'Demo', 'User'),
+          email: data.data.user.email,
+          firstName: data.data.user.firstName,
+          lastName: data.data.user.lastName,
+          initials: this.getInitials(data.data.user.email, data.data.user.firstName, data.data.user.lastName),
           loginTime: new Date().toISOString()
         };
         localStorage.setItem(this.storageKey, JSON.stringify(user));
         localStorage.setItem('pishnet_user', JSON.stringify(user));
-        resolve(user);
-      }, 500);
+        return user;
+      } else {
+        throw new Error(data.message || 'Login failed');
+      }
     });
   }
 
   logout() {
     localStorage.removeItem(this.storageKey);
     localStorage.removeItem('pishnet_user');
+    localStorage.removeItem('phishnet_currentUser');
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('userAvatar');
+    localStorage.removeItem('avatarFitMode');
     window.location.href = 'index.html';
   }
 
@@ -115,20 +141,45 @@ class AuthManager {
   }
 
   register(userData) {
-    // Simple demo registration - accepts all data
-    return new Promise((resolve) => {
-      setTimeout(() => {
+    // Call backend API to register user
+    return fetch('/api/auth/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        email: userData.email,
+        password: userData.password,
+        confirmPassword: userData.confirmPassword
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(error => {
+          throw new Error(error.message || 'Registration failed');
+        });
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.success && data.data.token) {
+        // Store token and user info
+        localStorage.setItem('token', data.data.token);
         const user = {
-          email: userData.email,
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          initials: this.getInitials(userData.email, userData.firstName, userData.lastName),
+          email: data.data.user.email,
+          firstName: data.data.user.firstName,
+          lastName: data.data.user.lastName,
+          initials: this.getInitials(data.data.user.email, data.data.user.firstName, data.data.user.lastName),
           loginTime: new Date().toISOString()
         };
         localStorage.setItem(this.storageKey, JSON.stringify(user));
         localStorage.setItem('pishnet_user', JSON.stringify(user));
-        resolve(user);
-      }, 500);
+        return user;
+      } else {
+        throw new Error(data.message || 'Registration failed');
+      }
     });
   }
 }
@@ -172,7 +223,23 @@ class NavigationManager {
         userAvatar.style.display = 'flex';
 
         const user = window.auth.getUser();
-        userAvatar.textContent = user.initials;
+        
+        // Check for saved profile picture (fallback to user object if localStorage missing)
+        const savedAvatar = localStorage.getItem('userAvatar') || (user && user.avatar);
+        const savedFitMode = localStorage.getItem('avatarFitMode') || (user && user.avatarFit) || 'cover';
+        
+        if (savedAvatar) {
+          // Show profile picture
+          userAvatar.style.backgroundImage = `url(${savedAvatar})`;
+          userAvatar.style.backgroundSize = savedFitMode;
+          userAvatar.style.backgroundPosition = 'center';
+          userAvatar.style.backgroundRepeat = 'no-repeat';
+          userAvatar.textContent = '';
+        } else {
+          // Show initials
+          userAvatar.style.backgroundImage = '';
+          userAvatar.textContent = user.initials;
+        }
 
         // Hide extra dashboard button
         if (dashboardButton) dashboardButton.style.display = 'none';
@@ -268,6 +335,7 @@ class NavigationManager {
     const userAvatar = document.querySelector('.user-avatar');
     if (userAvatar) {
       userAvatar.addEventListener('click', () => {
+        // Reverted: toggle profile menu on avatar click
         this.toggleProfileMenu();
       });
     }
@@ -310,7 +378,7 @@ class NavigationManager {
         </svg>
         Settings
       </a>
-      <button class="profile-menu-item" onclick="window.auth.logout()">
+      <button class="profile-menu-item" id="logout-btn">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
           <polyline points="16 17 21 12 16 7"/>
@@ -322,6 +390,12 @@ class NavigationManager {
 
     const userAvatar = document.querySelector('.user-avatar');
     userAvatar.appendChild(menu);
+
+    // Add event listener for logout button
+    const logoutBtn = menu.querySelector('#logout-btn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => window.auth.logout());
+    }
 
     setTimeout(() => {
       document.addEventListener('click', function closeMenu(e) {
@@ -415,7 +489,7 @@ class ScanManager {
       <div class="scan-result-content">
         <div class="scan-result-header">
           <h3>Scan Complete</h3>
-          <button class="close-modal" onclick="this.closest('.scan-result-modal').remove()">
+          <button class="close-modal" id="scan-modal-close">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"/>
               <line x1="6" y1="6" x2="18" y2="18"/>
@@ -434,12 +508,20 @@ class ScanManager {
           </div>
         </div>
         <div class="scan-result-footer">
-          <button class="btn btn-primary" onclick="this.closest('.scan-result-modal').remove()">Close</button>
+          <button class="btn btn-primary" id="scan-modal-close-btn">Close</button>
         </div>
       </div>
     `;
 
     document.body.appendChild(modal);
+
+    // Add event listeners for modal close buttons
+    const closeBtn = modal.querySelector('#scan-modal-close');
+    const closeBtnFooter = modal.querySelector('#scan-modal-close-btn');
+    const closeModal = () => modal.remove();
+    
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (closeBtnFooter) closeBtnFooter.addEventListener('click', closeModal);
   }
 
   showNotification(message, type = 'info') {
@@ -905,6 +987,35 @@ document.addEventListener('DOMContentLoaded', () => {
   const nav = new NavigationManager();
   const scanner = new ScanManager();
   const forms = new FormManager();
+
+  // Force avatar update after navigation loads
+  setTimeout(() => {
+    const userAvatar = document.querySelector('.user-avatar');
+      const userObj = window.auth.getUser();
+      const savedAvatar = localStorage.getItem('userAvatar') || (userObj && userObj.avatar);
+      const savedFitMode = localStorage.getItem('avatarFitMode') || (userObj && userObj.avatarFit) || 'cover';
+    
+      console.log('Avatar Debug:', {
+        hasUserAvatar: !!userAvatar,
+        hasSavedAvatar: !!savedAvatar,
+        savedFitMode: savedFitMode,
+        isLoggedIn: !!userObj,
+        avatarLength: savedAvatar ? savedAvatar.length : 0
+      });
+    
+      if (userAvatar && userObj) {
+        if (savedAvatar) {
+          console.log('Applying saved avatar to header');
+        userAvatar.style.backgroundImage = `url(${savedAvatar})`;
+        userAvatar.style.backgroundSize = savedFitMode;
+        userAvatar.style.backgroundPosition = 'center';
+        userAvatar.style.backgroundRepeat = 'no-repeat';
+        userAvatar.textContent = '';
+        } else {
+          console.log('No saved avatar found, showing initials');
+      }
+    }
+  }, 100);
 
   // Setup FAQ accordions
   document.querySelectorAll('.faq-question').forEach(question => {

@@ -49,23 +49,35 @@
           </h2>
 
           <div class="avatar-upload">
-            <div class="avatar-preview">JD</div>
+            <div class="avatar-preview" id="settingsAvatarPreview">JD</div>
             <div class="avatar-upload-buttons">
-              <button class="btn btn-outline btn-sm">Upload Photo</button>
-              <button class="btn btn-ghost btn-sm">Remove</button>
+              <input type="file" id="avatarFile" accept="image/*" style="display:none;">
+              <button type="button" class="btn btn-outline btn-sm" id="avatarUploadBtn">Upload Photo</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="avatarRemoveBtn">Remove</button>
+            </div>
+            <div class="avatar-fit-control">
+              <label for="avatarFitMode" class="form-label" style="margin:0; font-size:0.9rem;">Photo fit</label>
+              <select id="avatarFitMode" class="form-select" style="max-width: 170px;">
+                <option value="contain">Fit inside (no crop)</option>
+                <option value="cover">Fill circle (crop edges)</option>
+              </select>
             </div>
           </div>
 
-          <form>
-            <div class="grid grid-2" style="margin-bottom: 0;">
+          <form id="settings-profile-form">
+            <div class="grid grid-2">
               <div class="form-group">
-                <label for="fullName" class="form-label">Full Name</label>
-                <input type="text" id="fullName" class="form-input" value="John Doe">
+                <label for="firstName" class="form-label">First Name</label>
+                <input type="text" id="firstName" class="form-input" placeholder="First name">
               </div>
               <div class="form-group">
-                <label for="email" class="form-label">Email Address</label>
-                <input type="email" id="email" class="form-input" value="john.doe@example.com">
+                <label for="lastName" class="form-label">Last Name</label>
+                <input type="text" id="lastName" class="form-input" placeholder="Last name">
               </div>
+            </div>
+            <div class="form-group">
+              <label for="email" class="form-label">Email Address</label>
+              <input type="email" id="email" class="form-input" placeholder="you@example.com">
             </div>
 
             <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -84,45 +96,45 @@
 
           <div style="display: flex; flex-direction: column; gap: 1.5rem;">
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: rgba(255, 255, 255, 0.03); border-radius: var(--radius-md);">
-              <div>
+              <div style="flex: 1;">
                 <h4 style="font-size: 0.9375rem; margin-bottom: 0.25rem; color: white;">Email Notifications</h4>
                 <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0;">Receive email alerts when threats are detected</p>
               </div>
-              <label class="toggle-switch">
-                <input type="checkbox" checked onchange="handleToggle(this, 'Email Notifications')">
+              <label class="toggle-switch" style="flex-shrink: 0; margin-left: 1rem;">
+                <input type="checkbox" checked class="notification-toggle" data-label="Email Notifications">
                 <span class="toggle-slider"></span>
               </label>
             </div>
 
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: rgba(255, 255, 255, 0.03); border-radius: var(--radius-md);">
-              <div>
+              <div style="flex: 1;">
                 <h4 style="font-size: 0.9375rem; margin-bottom: 0.25rem; color: white;">Browser Notifications</h4>
                 <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0;">Get real-time browser notifications</p>
               </div>
-              <label class="toggle-switch">
-                <input type="checkbox" onchange="handleToggle(this, 'Browser Notifications')">
+              <label class="toggle-switch" style="flex-shrink: 0; margin-left: 1rem;">
+                <input type="checkbox" class="notification-toggle" data-label="Browser Notifications">
                 <span class="toggle-slider"></span>
               </label>
             </div>
 
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: rgba(255, 255, 255, 0.03); border-radius: var(--radius-md);">
-              <div>
+              <div style="flex: 1;">
                 <h4 style="font-size: 0.9375rem; margin-bottom: 0.25rem; color: white;">Weekly Reports</h4>
                 <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0;">Receive weekly security summary reports</p>
               </div>
-              <label class="toggle-switch">
-                <input type="checkbox" checked onchange="handleToggle(this, 'Weekly Reports')">
+              <label class="toggle-switch" style="flex-shrink: 0; margin-left: 1rem;">
+                <input type="checkbox" checked class="notification-toggle" data-label="Weekly Reports">
                 <span class="toggle-slider"></span>
               </label>
             </div>
 
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: rgba(255, 255, 255, 0.03); border-radius: var(--radius-md);">
-              <div>
+              <div style="flex: 1;">
                 <h4 style="font-size: 0.9375rem; margin-bottom: 0.25rem; color: white;">Security Alerts</h4>
                 <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0;">Critical security threat notifications</p>
               </div>
-              <label class="toggle-switch">
-                <input type="checkbox" checked onchange="handleToggle(this, 'Security Alerts')">
+              <label class="toggle-switch" style="flex-shrink: 0; margin-left: 1rem;">
+                <input type="checkbox" checked class="notification-toggle" data-label="Security Alerts">
                 <span class="toggle-slider"></span>
               </label>
             </div>
@@ -139,20 +151,44 @@
             Security
           </h2>
 
-          <form>
+          <form id="settings-password-form">
             <h3 style="font-size: 1.125rem; margin-bottom: 1rem;">Change Password</h3>
             <div class="form-group">
               <label for="currentPassword" class="form-label">Current Password</label>
-              <input type="password" id="currentPassword" class="form-input" placeholder="Enter current password">
+              <div class="input-with-toggle">
+                <input type="password" id="currentPassword" class="form-input password-field" placeholder="Enter current password">
+                <button type="button" class="pw-toggle" id="currentPwToggle" aria-label="Toggle password visibility">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+              </div>
             </div>
             <div class="grid grid-2" style="margin-bottom: 1rem;">
               <div class="form-group">
                 <label for="newPassword" class="form-label">New Password</label>
-                <input type="password" id="newPassword" class="form-input" placeholder="Enter new password">
+                <div class="input-with-toggle">
+                  <input type="password" id="newPassword" class="form-input password-field" placeholder="Enter new password">
+                  <button type="button" class="pw-toggle" id="newPwToggle" aria-label="Toggle password visibility">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div class="form-group">
                 <label for="confirmPassword" class="form-label">Confirm Password</label>
-                <input type="password" id="confirmPassword" class="form-input" placeholder="Confirm new password">
+                <div class="input-with-toggle">
+                  <input type="password" id="confirmPassword" class="form-input password-field" placeholder="Confirm new password">
+                  <button type="button" class="pw-toggle" id="confirmPwToggle" aria-label="Toggle password visibility">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -170,7 +206,7 @@
             Preferences
           </h2>
 
-          <form>
+          <form id="settings-preferences-form">
             <div class="form-group">
               <label for="timezone" class="form-label">Timezone</label>
               <select id="timezone" class="form-select">
@@ -206,12 +242,12 @@
             Danger Zone
           </h2>
 
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: rgba(255, 77, 77, 0.1); border-radius: var(--radius-md); margin-bottom: 1rem;">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; padding: 1.5rem; background: rgba(255, 77, 77, 0.08); border: 1px solid rgba(255, 77, 77, 0.2); border-radius: var(--radius-md); margin-bottom: 1rem; gap: 1rem;">
             <div>
               <h4 style="font-size: 0.9375rem; margin-bottom: 0.25rem; color: white;">Delete Account</h4>
               <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0;">Permanently delete your account and all data</p>
             </div>
-            <button class="btn btn-outline btn-sm" style="border-color: var(--color-malicious); color: var(--color-malicious);">Delete Account</button>
+            <button class="btn btn-danger">Delete Account</button>
           </div>
         </div>
       </div>
@@ -264,29 +300,8 @@
       © 2025 PhishNet. All rights reserved.
     </div>
   </footer>
-
-  <script src="api-service.js"></script>
+  <script src="utils/api.js"></script>
   <script src="app.js"></script>
-  <script>
-    function handleToggle(checkbox, settingName) {
-      const status = checkbox.checked ? 'enabled' : 'disabled';
-      console.log(`${settingName} ${status}`);
-      
-      // Optional: Show a toast notification
-      const notification = document.createElement('div');
-      notification.className = 'notification notification-info show';
-      notification.textContent = `${settingName} ${status}`;
-      notification.style.position = 'fixed';
-      notification.style.top = '2rem';
-      notification.style.right = '2rem';
-      notification.style.zIndex = '2001';
-      document.body.appendChild(notification);
-      
-      setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => notification.remove(), 300);
-      }, 2000);
-    }
-  </script>
+  <script src="settings.js"></script>
 </body>
 </html>
