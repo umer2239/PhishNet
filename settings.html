@@ -50,17 +50,23 @@
 
           <div class="avatar-upload">
             <div class="avatar-preview" id="settingsAvatarPreview">JD</div>
-            <div class="avatar-upload-buttons">
-              <input type="file" id="avatarFile" accept="image/*" style="display:none;">
-              <button type="button" class="btn btn-outline btn-sm" id="avatarUploadBtn">Upload Photo</button>
-              <button type="button" class="btn btn-ghost btn-sm" id="avatarRemoveBtn">Remove</button>
-            </div>
-            <div class="avatar-fit-control">
-              <label for="avatarFitMode" class="form-label" style="margin:0; font-size:0.9rem;">Photo fit</label>
-              <select id="avatarFitMode" class="form-select" style="max-width: 170px;">
-                <option value="contain">Fit inside (no crop)</option>
-                <option value="cover">Fill circle (crop edges)</option>
-              </select>
+            <div class="avatar-controls">
+              <div class="avatar-buttons-group">
+                <input type="file" id="avatarFile" accept="image/*" style="display:none;">
+                <button type="button" class="btn btn-outline btn-sm" id="avatarUploadBtn">Upload Photo</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="avatarRemoveBtn">Remove</button>
+                <div id="avatarUploadStatus" class="avatar-status">
+                  <svg class="spinner-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <span>Uploading...</span>
+                </div>
+              </div>
+              <div class="avatar-fit-control">
+                <label for="avatarFitMode" class="fit-label">Photo fit</label>
+                <select id="avatarFitMode" class="form-select">
+                  <option value="contain">Fit inside (no crop)</option>
+                  <option value="cover">Fill circle (crop edges)</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -300,7 +306,6 @@
       © 2025 PhishNet. All rights reserved.
     </div>
   </footer>
-  <script src="utils/api.js"></script>
   <script src="app.js"></script>
   <script src="settings.js"></script>
 </body>

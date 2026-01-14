@@ -86,6 +86,84 @@ router.put('/profile', authMiddleware, async (req, res, next) => {
   }
 });
 
+// ======================== UPDATE USER AVATAR ========================
+router.put('/profile/avatar', authMiddleware, async (req, res, next) => {
+  try {
+    const user = req.user;
+    const { avatar, fitMode, remove } = req.body;
+
+    if (remove) {
+      user.avatar = null;
+      user.avatarUpdatedAt = null;
+      if (fitMode) {
+        user.avatarFit = fitMode;
+      }
+      await user.save();
+      return res.status(200).json({
+        success: true,
+        message: 'Profile picture removed successfully',
+        data: { user: user.getProfile() },
+      });
+    }
+
+    // If only fitMode is provided (user changed fit mode without uploading new image)
+    if (!avatar && fitMode) {
+      if (user.avatar) {
+        user.avatarFit = fitMode;
+        await user.save();
+        return res.status(200).json({
+          success: true,
+          message: 'Avatar fit mode updated successfully',
+          data: { user: user.getProfile() },
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'No avatar exists to change fit mode',
+        });
+      }
+    }
+
+    if (!avatar || typeof avatar !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Avatar image is required',
+      });
+    }
+
+    // Basic data URL validation and size check (5MB max)
+    const dataUrlRegex = /^data:image\/(png|jpe?g|webp);base64,/i;
+    if (!dataUrlRegex.test(avatar)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Avatar must be a PNG, JPG, or WEBP data URL',
+      });
+    }
+
+    const base64Data = avatar.split(',')[1];
+    const sizeInBytes = Buffer.byteLength(base64Data, 'base64');
+    if (sizeInBytes > 5 * 1024 * 1024) {
+      return res.status(400).json({
+        success: false,
+        message: 'Avatar must be smaller than 5MB',
+      });
+    }
+
+    user.avatar = avatar;
+    user.avatarFit = fitMode || user.avatarFit || 'cover';
+    user.avatarUpdatedAt = new Date();
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile picture updated successfully',
+      data: { user: user.getProfile() },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ======================== UPDATE PASSWORD ========================
 router.put('/password', authMiddleware, async (req, res, next) => {
   try {

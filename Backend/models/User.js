@@ -162,6 +162,21 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Profile avatar
+    avatar: {
+      type: String, // Data URL (base64) or hosted URL
+      default: null,
+    },
+    avatarFit: {
+      type: String,
+      enum: ['cover', 'contain', 'fill', 'scale-down', 'auto'],
+      default: 'cover',
+    },
+    avatarUpdatedAt: {
+      type: Date,
+      default: null,
+    },
+
     // Timestamps
     createdAt: {
       type: Date,
@@ -303,6 +318,9 @@ userSchema.methods.getProfile = function () {
     isVerified: this.isVerified,
     lastLogin: this.lastLogin,
     createdAt: this.createdAt,
+    avatar: this.avatar,
+    avatarFit: this.avatarFit,
+    avatarUpdatedAt: this.avatarUpdatedAt,
     safeWebsitesVisited: this.safeWebsitesVisited,
     unsafeUrlsDetected: this.unsafeUrlsDetected,
     phishingUrlsDetected: this.phishingUrlsDetected,

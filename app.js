@@ -75,11 +75,19 @@ class AuthManager {
           email: data.data.user.email,
           firstName: data.data.user.firstName,
           lastName: data.data.user.lastName,
+          avatar: data.data.user.avatar || null,
+          avatarFit: data.data.user.avatarFit || 'cover',
           initials: this.getInitials(data.data.user.email, data.data.user.firstName, data.data.user.lastName),
           loginTime: new Date().toISOString()
         };
         localStorage.setItem(this.storageKey, JSON.stringify(user));
         localStorage.setItem('pishnet_user', JSON.stringify(user));
+        if (user.avatar) {
+          localStorage.setItem('userAvatar', user.avatar);
+          localStorage.setItem('avatarFitMode', user.avatarFit || 'cover');
+        } else {
+          localStorage.removeItem('userAvatar');
+        }
         return user;
       } else {
         throw new Error(data.message || 'Login failed');
@@ -122,6 +130,11 @@ class AuthManager {
     if (profile.firstName || profile.lastName) {
       user.initials = this.getInitials(profile.email || user.email, profile.firstName, profile.lastName);
     }
+    if (profile.avatarFit !== undefined) {
+      user.avatarFit = profile.avatarFit || 'cover';
+      localStorage.setItem('avatarFitMode', user.avatarFit);
+    }
+    // Don't store large avatar data in localStorage - fetch from server instead
     localStorage.setItem(this.storageKey, JSON.stringify(user));
     localStorage.setItem('pishnet_user', JSON.stringify(user));
   }
@@ -171,16 +184,107 @@ class AuthManager {
           email: data.data.user.email,
           firstName: data.data.user.firstName,
           lastName: data.data.user.lastName,
+          avatar: data.data.user.avatar || null,
+          avatarFit: data.data.user.avatarFit || 'cover',
           initials: this.getInitials(data.data.user.email, data.data.user.firstName, data.data.user.lastName),
           loginTime: new Date().toISOString()
         };
         localStorage.setItem(this.storageKey, JSON.stringify(user));
         localStorage.setItem('pishnet_user', JSON.stringify(user));
+        if (user.avatar) {
+          localStorage.setItem('userAvatar', user.avatar);
+          localStorage.setItem('avatarFitMode', user.avatarFit || 'cover');
+        } else {
+          localStorage.removeItem('userAvatar');
+        }
         return user;
       } else {
         throw new Error(data.message || 'Registration failed');
       }
     });
+  }
+
+  async refreshProfile() {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+
+    try {
+      const response = await fetch('/api/users/profile', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      if (data.success && data.data && data.data.user) {
+        const user = data.data.user;
+        this.setProfile({
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          avatarFit: user.avatarFit || 'cover',
+        });
+
+        // Store avatar in window object (not localStorage) to avoid storage quota issues
+        if (user.avatar) {
+          window.currentUserAvatar = user.avatar;
+          localStorage.setItem('avatarFitMode', user.avatarFit || 'cover');
+        } else {
+          window.currentUserAvatar = null;
+          localStorage.removeItem('avatarFitMode');
+        }
+        
+        // Apply avatar styling to all avatar elements
+        this.applyAvatarStyling(user);
+        
+        return user;
+      }
+    } catch (err) {
+      // Silent fail; user may not be logged in
+    }
+    return null;
+  }
+
+  // Apply avatar fit mode to all avatar elements on the page
+  applyAvatarStyling(user) {
+    if (!user || !user.avatar) return;
+    
+    const fitMode = user.avatarFit || 'cover';
+    const avatarUrl = window.currentUserAvatar;
+    
+    // Update header avatar (.user-avatar)
+    const headerAvatar = document.querySelector('.user-avatar');
+    if (headerAvatar) {
+      headerAvatar.style.backgroundImage = `url(${avatarUrl})`;
+      headerAvatar.style.setProperty('background-size', fitMode, 'important');
+      headerAvatar.style.backgroundPosition = 'center';
+      headerAvatar.style.backgroundRepeat = 'no-repeat';
+      headerAvatar.textContent = '';
+    }
+    
+    // Update profile menu avatar (.profile-menu-avatar) if it exists
+    const profileMenuAvatar = document.querySelector('.profile-menu-avatar');
+    if (profileMenuAvatar) {
+      profileMenuAvatar.style.backgroundImage = `url(${avatarUrl})`;
+      profileMenuAvatar.style.setProperty('background-size', fitMode, 'important');
+      profileMenuAvatar.style.backgroundPosition = 'center';
+      profileMenuAvatar.style.backgroundRepeat = 'no-repeat';
+      profileMenuAvatar.textContent = '';
+    }
+    
+    // Update settings avatar preview (.avatar-preview) if it exists
+    const settingsAvatar = document.getElementById('settingsAvatarPreview');
+    if (settingsAvatar) {
+      settingsAvatar.style.backgroundImage = `url(${avatarUrl})`;
+      settingsAvatar.style.setProperty('background-size', fitMode, 'important');
+      settingsAvatar.style.backgroundPosition = 'center';
+      settingsAvatar.style.backgroundRepeat = 'no-repeat';
+      settingsAvatar.textContent = '';
+    }
   }
 }
 
@@ -197,6 +301,14 @@ class NavigationManager {
     this.updateNavigation();
     this.setupEventListeners();
     this.setupDropdowns();
+    this.refreshProfileAndUpdate();
+  }
+
+  async refreshProfileAndUpdate() {
+    if (window.auth.isLoggedIn()) {
+      await window.auth.refreshProfile();
+      this.updateNavigation();
+    }
   }
 
   updateNavigation() {
@@ -224,21 +336,19 @@ class NavigationManager {
 
         const user = window.auth.getUser();
         
-        // Check for saved profile picture (fallback to user object if localStorage missing)
-        const savedAvatar = localStorage.getItem('userAvatar') || (user && user.avatar);
-        const savedFitMode = localStorage.getItem('avatarFitMode') || (user && user.avatarFit) || 'cover';
+        // Use window.currentUserAvatar (kept in memory) instead of localStorage
+        const savedAvatar = window.currentUserAvatar;
+        const savedFitMode = (user && user.avatarFit) || localStorage.getItem('avatarFitMode') || 'cover';
         
         if (savedAvatar) {
-          // Show profile picture
           userAvatar.style.backgroundImage = `url(${savedAvatar})`;
-          userAvatar.style.backgroundSize = savedFitMode;
+          userAvatar.style.setProperty('background-size', savedFitMode, 'important');
           userAvatar.style.backgroundPosition = 'center';
           userAvatar.style.backgroundRepeat = 'no-repeat';
           userAvatar.textContent = '';
         } else {
-          // Show initials
           userAvatar.style.backgroundImage = '';
-          userAvatar.textContent = user.initials;
+          userAvatar.textContent = user ? user.initials : '';
         }
 
         // Hide extra dashboard button
@@ -361,13 +471,14 @@ class NavigationManager {
       return;
     }
 
+    const user = window.auth.getUser();
     const menu = document.createElement('div');
     menu.className = 'profile-menu';
     menu.innerHTML = `
       <div class="profile-menu-header">
-        <div class="profile-menu-avatar">${window.auth.getUser().initials}</div>
+        <div class="profile-menu-avatar"></div>
         <div class="profile-menu-info">
-          <div class="profile-menu-email">${window.auth.getUser().email}</div>
+          <div class="profile-menu-email">${user ? user.email : ''}</div>
         </div>
       </div>
       <div class="profile-menu-divider"></div>
@@ -387,6 +498,16 @@ class NavigationManager {
         Logout
       </button>
     `;
+
+    const avatarEl = menu.querySelector('.profile-menu-avatar');
+    if (window.currentUserAvatar) {
+      avatarEl.style.backgroundImage = `url(${window.currentUserAvatar})`;
+      avatarEl.style.setProperty('background-size', user?.avatarFit || 'cover', 'important');
+      avatarEl.style.backgroundPosition = 'center';
+      avatarEl.style.backgroundRepeat = 'no-repeat';
+    } else if (user && user.initials) {
+      avatarEl.textContent = user.initials;
+    }
 
     const userAvatar = document.querySelector('.user-avatar');
     userAvatar.appendChild(menu);
@@ -1007,7 +1128,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (savedAvatar) {
           console.log('Applying saved avatar to header');
         userAvatar.style.backgroundImage = `url(${savedAvatar})`;
-        userAvatar.style.backgroundSize = savedFitMode;
+        userAvatar.style.setProperty('background-size', savedFitMode, 'important');
         userAvatar.style.backgroundPosition = 'center';
         userAvatar.style.backgroundRepeat = 'no-repeat';
         userAvatar.textContent = '';
