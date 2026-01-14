@@ -22,6 +22,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const scanRoutes = require('./routes/scan');
 const analyticsRoutes = require('./routes/analytics');
+const chatbotRoutes = require('./routes/chatbot');
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
@@ -104,6 +105,9 @@ app.use('/api/auth', authRoutes);
 
 // URL Scanning routes (public - no auth required for basic scan)
 app.use('/api/scan', scanRoutes);
+
+// Chatbot routes (public - works for both logged in and guest users)
+app.use('/api/chatbot', chatbotRoutes);
 
 // Protected routes - require authentication
 app.use('/api/users', authMiddleware, userRoutes);
