@@ -2,6 +2,11 @@
 
 Full-stack phishing protection site with an Express/MongoDB backend (in `Backend/`) and static frontend pages in the repo root. The backend serves the frontend and exposes REST APIs under `/api`.
 
+## Chatbot (Gemini)
+- Frontend widget: `chatbot.js` + `chatbot.css` (included on all pages). The launcher opens a floating chat window with typing indicator, attachment support, and Gemini-powered answers.
+- Backend endpoint: `POST /api/chatbot/message` (implemented in Backend/server). Configure your Gemini API key in `Backend/.env`.
+- Local dev: start the backend (see below) and open any page (e.g., `index.html` via http://localhost:3000). The widget calls the backend proxy, so the bot works without exposing the API key to the browser.
+
 ## Requirements
 - Node.js 14+ and npm 6+
 - MongoDB Atlas cluster (or local MongoDB)
@@ -23,6 +28,26 @@ Full-stack phishing protection site with an Express/MongoDB backend (in `Backend
 4) Open http://localhost:3000 to load the frontend. API base URL: http://localhost:3000/api.
 
 > Alternatively, from the repo root you can use the helper scripts: `./run-server.sh` (bash) or `./run-server.bat` (PowerShell/cmd), which just start `Backend/npm start`.
+
+## File Structure (Webpage)
+```
+Webpage/
+├─ Backend/                # Express API + chatbot proxy
+│  ├─ server.js
+│  ├─ routes/
+│  ├─ controllers/
+│  ├─ models/
+│  └─ utils/
+├─ chatbot.js              # Chatbot widget logic (Gemini)
+├─ chatbot.css             # Chatbot widget styles
+├─ index.html              # Landing page (others: dashboard.html, login.html, etc.)
+├─ app.js                  # Frontend scripts for charts/UI
+├─ chart-init.js
+├─ styles.css
+├─ run-server.sh
+├─ run-server.bat
+└─ docs & guides           # API_REFERENCE.md, BACKEND_SETUP.md, QUICKSTART.md, SCHEMA_DOCUMENTATION.md, PROJECT_STRUCTURE.md
+```
 
 ## Project Structure
 - Backend/: Express server, routes, models, middleware, utilities, env file

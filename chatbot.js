@@ -1,6 +1,6 @@
 // ============================================
 // PHISHNET CHATBOT WIDGET
-// Powered by OpenAI API
+// Powered by Google Gemini AI
 // ============================================
 
 class PhishNetChatbot {
@@ -47,8 +47,62 @@ class PhishNetChatbot {
     this.attachBtn.addEventListener('click', () => this.fileInput.click());
     this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
 
+    // Ensure typing indicator always uses the animated dot markup
+    if (this.typingIndicator) {
+      this.typingIndicator.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+    }
+
     // Load chat history from localStorage
     this.loadHistory();
+    this.refreshSeedBotAvatar();
+  }
+
+  getBotAvatarSVG() {
+    // Heroicons-inspired minimal robot for a professional feel
+    return `
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="presentation">
+        <g fill="none" stroke="none" stroke-width="1">
+          <rect x="14" y="18" width="36" height="26" rx="10" fill="#0b172a" stroke="#1f2937" stroke-width="1.5" />
+          <rect x="20" y="14" width="24" height="6" rx="3" fill="#1f2937" />
+          <rect x="18" y="22" width="28" height="12" rx="6" fill="#111827" stroke="#38bdf8" stroke-width="1.25" />
+          <circle cx="26" cy="28" r="3" fill="#0b63d9" />
+          <circle cx="38" cy="28" r="3" fill="#0b63d9" />
+          <circle cx="26" cy="28" r="1.4" fill="#e0f2fe" />
+          <circle cx="38" cy="28" r="1.4" fill="#e0f2fe" />
+          <path d="M25 35c4 3 10 3 14 0" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" />
+          <rect x="30" y="10" width="4" height="6" rx="2" fill="#38bdf8" />
+          <path d="M16 27h-3" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" />
+          <path d="M51 27h-3" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" />
+        </g>
+      </svg>`;
+  }
+
+  refreshSeedBotAvatar() {
+    if (!this.messagesContainer) return;
+    const seedAvatar = this.messagesContainer.querySelector('.bot-message .message-avatar');
+    if (seedAvatar) {
+      seedAvatar.classList.add('bot');
+      seedAvatar.innerHTML = this.getBotAvatarSVG();
+    }
+  }
+
+  // Sanitize text, then apply lightweight markdown for **bold** and line breaks
+  renderBotMessage(text) {
+    const escapeHtml = (str) => str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    let safe = escapeHtml(text || '');
+    // Bold (**strong**)
+    safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Simple bullet styling: convert leading * to a bullet dot
+    safe = safe.replace(/(^|\n)\*\s+/g, '$1<span class="bullet-dot">•</span> ');
+    // Preserve newlines
+    safe = safe.replace(/\n/g, '<br>');
+    return safe;
   }
 
   setLauncherIcon() {
@@ -184,15 +238,15 @@ class PhishNetChatbot {
     this.clearAttachment();
   }
 
-  addMessage(text, sender) {
+  addMessage(text, sender, attachment = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `chatbot-message ${sender}-message`;
 
     const avatar = document.createElement('div');
-    avatar.className = 'message-avatar';
+    avatar.className = sender === 'bot' ? 'message-avatar bot' : 'message-avatar';
     
     if (sender === 'bot') {
-      avatar.textContent = 'PN';
+      avatar.innerHTML = this.getBotAvatarSVG();
     } else {
       // User avatar - show profile picture if available, otherwise initials
       const userAvatar = this.getUserAvatarURL();
@@ -215,7 +269,11 @@ class PhishNetChatbot {
     content.className = 'message-content';
     
     const p = document.createElement('p');
-    p.textContent = text;
+    if (sender === 'bot') {
+      p.innerHTML = this.renderBotMessage(text);
+    } else {
+      p.textContent = text;
+    }
     content.appendChild(p);
 
     // Render attachment preview inside the message bubble (images only)
@@ -349,12 +407,16 @@ class PhishNetChatbot {
   }
 
   showTyping() {
-    this.typingIndicator.classList.remove('hidden');
-    this.scrollToBottom();
+    if (this.typingIndicator) {
+      this.typingIndicator.classList.remove('hidden');
+      this.scrollToBottom();
+    }
   }
 
   hideTyping() {
-    this.typingIndicator.classList.add('hidden');
+    if (this.typingIndicator) {
+      this.typingIndicator.classList.add('hidden');
+    }
   }
 
   scrollToBottom() {

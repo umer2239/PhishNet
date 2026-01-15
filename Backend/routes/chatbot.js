@@ -2,21 +2,17 @@ const express = require('express');
 const router = express.Router();
 const { optionalAuthMiddleware } = require('../middleware/auth');
 
-// Initialize OpenAI - will be set after npm install
-let openai = null;
+// Use fetch to call Gemini API directly via REST
+let apiKey = null;
+let modelName = null;
 
-try {
-  const OpenAI = require('openai');
-  
-  if (process.env.OPENAI_API_KEY) {
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-  } else {
-    console.warn('⚠️  OPENAI_API_KEY not set. Chatbot will use fallback responses.');
-  }
-} catch (error) {
-  console.warn('⚠️  OpenAI package not installed. Run: npm install openai');
+if (process.env.GEMINI_API_KEY) {
+  apiKey = process.env.GEMINI_API_KEY;
+  modelName = process.env.GEMINI_MODEL || 'gemini-pro';
+  console.log(`✓ Gemini AI configured with model: ${modelName}`);
+  console.log(`✓ API will use endpoint: https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`);
+} else {
+  console.warn('⚠️  GEMINI_API_KEY not set. Chatbot will use fallback responses.');
 }
 
 // System prompt for the chatbot
@@ -44,51 +40,230 @@ PhishNet Features:
 
 Keep responses under 150 words unless detailed explanation is needed.`;
 
-// Fallback responses when OpenAI is not available
-const fallbackResponses = {
-  greeting: "👋 Hello! I'm your PhishNet assistant. I can help you with phishing protection, URL scanning, and cybersecurity tips. What would you like to know?",
-  
-  phishing: "🎣 Phishing is when attackers try to steal your personal information by pretending to be someone trustworthy. PhishNet helps detect phishing emails and malicious URLs using AI. Want to learn how to spot phishing attempts?",
-  
-  urlCheck: "🔍 To check if a URL is safe:\n1. Go to the Dashboard\n2. Paste the suspicious URL\n3. Click 'Analyze URL'\n4. Review the threat report\n\nOur AI analyzes the URL and gives you a safety score!",
-  
-  features: "✨ PhishNet offers:\n• Real-time URL scanning\n• AI-powered phishing detection\n• Threat confidence scoring\n• Scan history tracking\n• Detailed security reports\n• Browser protection tips\n\nWant to try scanning a URL?",
-  
-  howTo: "🚀 Getting started:\n1. Sign up for a free account\n2. Access the Dashboard\n3. Paste any suspicious URL or email link\n4. Get instant threat analysis\n5. View detailed reports\n\nIt's that simple! Ready to scan your first URL?",
-  
-  safety: "🛡️ Stay safe online:\n• Never click suspicious links\n• Check sender email addresses\n• Look for HTTPS in URLs\n• Don't share personal info via email\n• Use PhishNet to verify links\n• Enable 2FA on accounts\n• Keep software updated",
-  
-  default: "I'm here to help with phishing protection and cybersecurity. I can answer questions about:\n• How to detect phishing\n• Using PhishNet features\n• Staying safe online\n• Understanding threat reports\n\nWhat would you like to know?"
-};
+// Fallback responses when Gemini AI is not available
+// Using smart pattern matching to provide contextual responses
+
 
 function getFallbackResponse(message) {
   const lowerMsg = message.toLowerCase();
 
-  if (/(hello|hi|hey|good morning|good evening)/i.test(lowerMsg)) {
-    return fallbackResponses.greeting;
+  // Detailed responses based on keywords
+  if (/(phishing|phish|scam|fraud|fake|spoof)/i.test(lowerMsg)) {
+    return `🎣 **Phishing Explained:**
+
+Phishing is a cyber attack where criminals try to trick you into revealing sensitive information (passwords, credit cards, personal data) by pretending to be a trustworthy source.
+
+**Common phishing tactics:**
+• Fake emails from banks/companies
+• Suspicious links in messages
+• Urgent requests for information
+• Lookalike websites (similar URLs)
+
+**PhishNet Protection:**
+PhishNet uses AI to analyze URLs and emails, checking for phishing indicators like:
+✓ Domain reputation
+✓ SSL certificate validity
+✓ Content analysis
+✓ Known phishing patterns
+
+**Stay Safe:**
+1. Never click links from unknown senders
+2. Check email addresses carefully
+3. Use PhishNet to verify suspicious links
+4. Enable 2-factor authentication`;
   }
   
-  if (/(phishing|phish|scam|fraud|fake)/i.test(lowerMsg)) {
-    return fallbackResponses.phishing;
+  if (/(url|link|website|check|scan|analyze|verify)/i.test(lowerMsg)) {
+    return `🔍 **How to Check URLs with PhishNet:**
+
+**Quick Steps:**
+1. Go to PhishNet Dashboard
+2. Paste the suspicious URL or email link
+3. Click "Analyze URL"
+4. View the threat report instantly
+
+**What PhishNet Checks:**
+✓ URL reputation (blacklists, databases)
+✓ Domain age and registration
+✓ SSL/TLS certificate
+✓ Content analysis (phishing keywords)
+✓ Redirects and obfuscation
+✓ Historical threat data
+
+**Confidence Score:**
+Each analysis includes:
+• **Safe (Green):** Low phishing risk
+• **Warning (Yellow):** Suspicious indicators
+• **Dangerous (Red):** High phishing risk
+
+Try it now - paste any suspicious link!`;
   }
   
-  if (/(url|link|website|check|scan|analyze)/i.test(lowerMsg)) {
-    return fallbackResponses.urlCheck;
+  if (/(feature|what can|help|capability|ability|tool)/i.test(lowerMsg)) {
+    return `✨ **PhishNet Features:**
+
+📊 **Dashboard**
+• Real-time URL/email scanning
+• Instant threat analysis
+• AI-powered confidence scoring
+• Detailed security reports
+
+📈 **Analytics**
+• Scan history & trends
+• Threat statistics
+• Top threats detected
+• Platform insights
+
+🛡️ **Protection**
+• Browser extensions available
+• Email integration
+• Custom security rules
+• API access for developers
+
+📱 **Accessibility**
+• Web-based interface
+• Mobile-friendly
+• Easy-to-understand reports
+• Quick threat assessment
+
+💡 **Intelligence**
+• Machine learning detection
+• Regular database updates
+• Threat intelligence feeds
+• Community reports
+
+What feature interests you?`;
   }
   
-  if (/(feature|what can|help|capability)/i.test(lowerMsg)) {
-    return fallbackResponses.features;
+  if (/(how to|get started|use|begin|start|tutorial|guide)/i.test(lowerMsg)) {
+    return `🚀 **Getting Started with PhishNet:**
+
+**Step 1: Sign Up**
+• Create a free account
+• Verify your email
+• Set up your profile
+
+**Step 2: Dashboard Tour**
+• Explore the main interface
+• Check available tools
+• Review your settings
+
+**Step 3: Your First Scan**
+1. Click "Scan URL"
+2. Paste suspicious link
+3. Wait for analysis
+4. Review threat report
+
+**Step 4: Understand Results**
+• Threat level (Safe/Warning/Dangerous)
+• Confidence percentage
+• Detailed indicators
+• Recommendations
+
+**Pro Tips:**
+✓ Bookmark suspicious links for later
+✓ Share reports with others
+✓ Set up email alerts
+✓ Install browser extension
+
+Start scanning now - what URL would you like to check?`;
   }
   
-  if (/(how to|get started|use|begin)/i.test(lowerMsg)) {
-    return fallbackResponses.howTo;
-  }
-  
-  if (/(safe|protect|security|tip)/i.test(lowerMsg)) {
-    return fallbackResponses.safety;
+  if (/(safe|protect|security|security|tip|prevent|avoid)/i.test(lowerMsg)) {
+    return `🛡️ **Online Safety Tips:**
+
+**Email Security:**
+• Never click links from unknown senders
+• Verify sender email address carefully
+• Look for spelling mistakes
+• Be suspicious of urgent requests
+• Hover over links to see real URL
+
+**Website Safety:**
+• Check for HTTPS (padlock icon)
+• Verify domain spelling
+• Don't trust shortened URLs
+• Use PhishNet to verify sites
+• Look for legitimacy indicators
+
+**Password Safety:**
+• Use strong, unique passwords
+• Enable 2-factor authentication
+• Never share via email
+• Change after suspicious activity
+• Use password manager
+
+**Account Protection:**
+• Update software regularly
+• Use antivirus software
+• Monitor account activity
+• Set recovery options
+• Review connected apps
+
+**PhishNet Benefits:**
+✓ Verify URLs before clicking
+✓ Instant threat detection
+✓ AI-powered analysis
+✓ Detailed reports
+✓ Peace of mind
+
+Need help with anything specific?`;
   }
 
-  return fallbackResponses.default;
+  if (/(hello|hi|hey|good morning|good evening|greet)/i.test(lowerMsg)) {
+    return `👋 **Welcome to PhishNet Assistant!**
+
+I'm here to help you understand and stay safe from phishing attacks. I can answer questions about:
+
+🎣 **Phishing Protection**
+- What is phishing and how it works
+- How to spot phishing attempts
+- Common phishing tactics
+
+🔍 **URL & Email Scanning**
+- How to check suspicious links
+- Understanding threat reports
+- Using PhishNet tools
+
+💡 **Features & Getting Started**
+- PhishNet capabilities
+- How to set up your account
+- Using the dashboard
+
+🛡️ **Online Safety Tips**
+- Best practices for email
+- Website verification
+- Account protection
+
+**Quick Examples:**
+• "What is phishing?"
+• "How do I scan a URL?"
+• "Tell me about PhishNet features"
+• "What are phishing red flags?"
+
+What would you like to know?`;
+  }
+
+  // Smart generic response that acknowledges the question
+  return `🤖 **I'm here to help!**
+
+I can assist you with:
+- **Phishing attacks & detection** - How they work and how to stay safe
+- **URL scanning & verification** - Check suspicious links with PhishNet
+- **Email security** - Identify phishing emails and protect your accounts
+- **PhishNet features** - Dashboard, analytics, browser extensions
+- **Getting started** - Setting up your account and first scan
+- **Online safety tips** - Best practices and security recommendations
+
+Regarding your question about "${message}": This sounds like it might relate to cybersecurity or phishing protection. 
+
+**For more specific help, try asking:**
+- "What is phishing?"
+- "How do I check if a URL is safe?"
+- "What PhishNet features are available?"
+- "How do I protect my email?"
+
+How can I assist you today?`;
 }
 
 // Attachment validation helpers
@@ -161,45 +336,96 @@ router.post('/message', optionalAuthMiddleware, async (req, res, next) => {
 
     let reply;
 
-    // Use OpenAI if available, otherwise use fallback
-    if (openai) {
+    // Use Gemini AI if available, otherwise use fallback
+    if (apiKey) {
       try {
-        const userContent = [];
-        if (userMessage) {
-          userContent.push({ type: 'text', text: userMessage });
-        }
+        const prompt = `${SYSTEM_PROMPT}\n\nUser: ${userMessage || 'Please describe this image.'}`;
+        
+        // Build the API request payload
+        const payload = {
+          contents: [{
+            parts: [
+              { text: prompt }
+            ]
+          }],
+          generationConfig: {
+            maxOutputTokens: 300,
+            temperature: 0.7,
+          }
+        };
+        
+        // Add image if present
         if (validatedAttachment?.dataUrl) {
-          userContent.push({ type: 'image_url', image_url: { url: validatedAttachment.dataUrl } });
+          const base64Data = validatedAttachment.dataUrl.split(',')[1] || validatedAttachment.dataUrl;
+          payload.contents[0].parts.push({
+            inlineData: {
+              mimeType: validatedAttachment.mimeType,
+              data: base64Data
+            }
+          });
         }
 
-        const completion = await openai.chat.completions.create({
-          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: userContent.length > 0 ? userContent : [{ type: 'text', text: 'Please describe the attachment.' }] }
-          ],
-          max_tokens: 300,
-          temperature: 0.7,
+        // Ensure model name has 'models/' prefix
+        let fullModelName = modelName;
+        if (!fullModelName.startsWith('models/')) {
+          fullModelName = `models/${modelName}`;
+        }
+
+        // Call Gemini API via REST - try different endpoints
+        let apiUrl = `https://generativelanguage.googleapis.com/v1beta/${fullModelName}:generateContent?key=${apiKey}`;
+        console.log(`Calling Gemini API: ${apiUrl.substring(0, 100)}...`);
+        
+        let apiResponse = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         });
 
-        reply = completion.choices[0].message.content.trim();
+        // If 404, try with v1 endpoint instead of v1beta
+        if (apiResponse.status === 404) {
+          console.warn(`v1beta endpoint returned 404, trying v1 endpoint...`);
+          apiUrl = `https://generativelanguage.googleapis.com/v1/${fullModelName}:generateContent?key=${apiKey}`;
+          apiResponse = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        }
+
+        const responseText = await apiResponse.text();
+        
+        if (!apiResponse.ok) {
+          console.error(`API returned status ${apiResponse.status}: ${responseText}`);
+          throw new Error(`API Error: ${apiResponse.status}`);
+        }
+
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (e) {
+          console.error('Failed to parse API response:', responseText);
+          throw new Error('Invalid JSON response from API');
+        }
+        
+        if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+          reply = data.candidates[0].content.parts[0].text.trim();
+        } else {
+          console.error('Unexpected API response structure:', data);
+          throw new Error('Invalid API response structure');
+        }
       } catch (error) {
-        console.error('OpenAI API error:', error.message);
+        console.error('Gemini API error:', error.message);
         // Fallback to rule-based response on API error
         const fallbackMsg = userMessage || 'Attachment received.';
         reply = validatedAttachment
-          ? `${getFallbackResponse(fallbackMsg)}
-
-(Note: Vision is unavailable right now, so I could not view the attachment.)`
+          ? `${getFallbackResponse(fallbackMsg)}\n\n(Note: AI vision is temporarily unavailable.)`
           : getFallbackResponse(fallbackMsg);
       }
     } else {
       // Use fallback responses
       const fallbackMsg = userMessage || 'Attachment received.';
       reply = validatedAttachment
-        ? `${getFallbackResponse(fallbackMsg)}
-
-(Note: Vision is unavailable right now, so I could not view the attachment.)`
+        ? `${getFallbackResponse(fallbackMsg)}\n\n(Note: AI is not configured. Using fallback responses.)`
         : getFallbackResponse(fallbackMsg);
     }
 
@@ -221,8 +447,8 @@ router.get('/status', (req, res) => {
     success: true,
     data: {
       enabled: true,
-      aiPowered: !!openai,
-      model: openai ? (process.env.OPENAI_MODEL || 'gpt-4o-mini') : 'fallback',
+      aiPowered: !!apiKey,
+      model: apiKey ? modelName : 'fallback',
     },
   });
 });
