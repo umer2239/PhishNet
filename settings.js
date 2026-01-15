@@ -13,6 +13,19 @@ let currentAvatarURL = null;
 const tokenKey = 'token';
 const apiBase = '/api';
 
+// Debounce helper to prevent rapid API calls
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
 // Compress image to reduce file size (200x200px max, high quality)
 async function compressImage(dataUrl, maxSize = 50 * 1024) {
   return new Promise((resolve, reject) => {
@@ -232,23 +245,27 @@ function updateHeaderAvatar(imageURL, fitMode) {
   }
 }
 
-// Avatar fit mode change
+// Avatar fit mode change - debounced to prevent rapid API calls
+const saveFitMode = debounce(async (fitMode) => {
+  try {
+    await authFetch(`${apiBase}/users/profile/avatar`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fitMode: fitMode }),
+    });
+  } catch (err) {
+    console.error('Error saving avatar fit mode:', err);
+  }
+}, 500);
+
 avatarFitMode?.addEventListener('change', async () => {
   if (currentAvatarURL) {
     const fitMode = avatarFitMode.value;
     updateAvatarPreview(currentAvatarURL, fitMode);
     updateHeaderAvatar(currentAvatarURL, fitMode);
     
-    // Also save the fit mode to backend
-    try {
-      await authFetch(`${apiBase}/users/profile/avatar`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fitMode: fitMode }),
-      });
-    } catch (err) {
-      console.error('Error saving avatar fit mode:', err);
-    }
+    // Save the fit mode to backend with debouncing
+    saveFitMode(fitMode);
   }
 });
 

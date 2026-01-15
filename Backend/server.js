@@ -77,8 +77,17 @@ app.use(
 // Rate limiting
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || 900000), // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || 100), // limit each IP to 100 requests per windowMs
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || 500), // limit each IP to 500 requests per windowMs
   message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// More lenient rate limiter for file uploads and profile updates
+const uploadLimiter = rateLimit({
+  windowMs: 60000, // 1 minute
+  max: 50, // 50 requests per minute
+  message: 'Too many upload requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -88,7 +97,18 @@ app.use(limiter);
 
 // ======================== STATIC FILES ========================
 // Serve static files (HTML, CSS, etc.) from parent directory
-app.use(express.static(path.join(__dirname, '..')));
+app.use(express.static(path.join(__dirname, '..'), {
+  setHeaders: (res, filePath) => {
+    // Set proper MIME types
+    if (filePath.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    } else if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (filePath.endsWith('.html')) {
+      res.setHeader('Content-Type', 'text/html');
+    }
+  }
+}));
 
 // ======================== HEALTH CHECK ========================
 app.get('/api/health', (req, res) => {
@@ -110,7 +130,7 @@ app.use('/api/scan', scanRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 
 // Protected routes - require authentication
-app.use('/api/users', authMiddleware, userRoutes);
+app.use('/api/users', authMiddleware, uploadLimiter, userRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRoutes);
 
 // ======================== ROOT ROUTE ========================
