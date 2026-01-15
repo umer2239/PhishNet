@@ -1,0 +1,12 @@
+# Jekyll configuration for GitHub Pages
+exclude:
+  - node_modules/
+  - Backend/
+  - Webpage/Backend/
+  - Extention Page/backend/
+  - "*.lock"
+  - package.json
+  - package-lock.json
+  - .gitignore
+  - .gitattributes
+  - README.md

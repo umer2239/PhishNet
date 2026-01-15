@@ -3,6 +3,10 @@ node_modules/
 **/node_modules/
 package-lock.json
 
+# Backend (not needed for GitHub Pages)
+Webpage/Backend/
+Backend/
+
 # Environment variables
 .env
 .env.local
