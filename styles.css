@@ -2624,7 +2624,7 @@ table tbody tr:hover {
 /* Give password input room on the right so text doesn't overlap the eye */
 /* Slightly reduced compared to older value for better visual centering */
 .input-with-toggle .password-field {
-  padding-right: 3.2rem; /* room for the eye button */
+  padding-right: 2.6rem; /* room for the eye button without stealing input space */
   box-sizing: border-box;
 }
 
@@ -2632,17 +2632,18 @@ table tbody tr:hover {
 /* NOTE: translateY(-48%) gives optical centering for your input sizes */
 .input-with-toggle .pw-toggle {
   position: absolute;
-  right: 0.6rem;               /* tweak for visual alignment */
+  right: 0.6rem;               /* visual alignment */
   top: 50%;
-  transform: translateY(-48%); /* optical center (was -50%) */
+  transform: translateY(-50%);
   background: transparent;
   border: none;
   color: rgba(255,255,255,0.72);
   cursor: pointer;
-  padding: 0.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 0;                  /* keep the hit area tight */
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
   line-height: 0;
   transition: color 160ms ease, transform 160ms ease;
 }

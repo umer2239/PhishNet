@@ -365,6 +365,12 @@ class NavigationManager {
     // Apply logged-in class for global styling
     document.body.classList.toggle('logged-in', isLoggedIn);
 
+    // Hide guest-only quick scan helper text when logged in
+    const quickScanGuestText = document.getElementById('quick-scan-guest-text');
+    if (quickScanGuestText) {
+      quickScanGuestText.style.display = isLoggedIn ? 'none' : 'block';
+    }
+
     // Safety check for landing page
     if (isLoggedIn && window.location.pathname.includes('index.html')) {
       setTimeout(() => {
