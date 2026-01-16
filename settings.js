@@ -149,30 +149,20 @@ avatarFile?.addEventListener('change', (e) => {
 
       let dataUrl = event.target.result;
       
-      // Compress image before uploading
+      // Compress image before previewing (do NOT upload to server yet)
       dataUrl = await compressImage(dataUrl, 50 * 1024);
       
+      // Store temporarily for later save
       currentAvatarURL = dataUrl;
       window.currentUserAvatar = dataUrl;
       const fitMode = avatarFitMode?.value || 'cover';
       updateAvatarPreview(currentAvatarURL, fitMode);
-
-      const result = await authFetch(`${apiBase}/users/profile/avatar`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ avatar: dataUrl, fitMode: avatarFitMode.value }),
-      });
-
-      if (result?.data?.user) {
-        syncUserState(result.data.user);
-        cacheProfileData(result.data.user); // Update cache after upload
-      }
-
-      updateHeaderAvatar(currentAvatarURL, avatarFitMode.value);
-      showNotification('Profile picture uploaded successfully!', 'success');
+      
+      // Show preview only message (will be saved when user clicks Save)
+      showNotification('Picture preview updated. Click Save to confirm changes.', 'info');
     } catch (err) {
       console.error(err);
-      showNotification(err.message || 'Failed to upload profile picture', 'error');
+      showNotification(err.message || 'Failed to process picture', 'error');
     } finally {
       // Hide loading spinner and re-enable buttons
       if (avatarUploadStatus) {
@@ -195,7 +185,17 @@ avatarFile?.addEventListener('change', (e) => {
 function updateAvatarPreview(imageURL, fitMode = null) {
   if (imageURL) {
     const mode = fitMode || avatarFitMode?.value || 'cover';
-    settingsAvatarPreview.style.backgroundImage = `url(${imageURL})`;
+    // Add cache-busting timestamp and clear old image first
+    settingsAvatarPreview.style.backgroundImage = '';
+    // For data URLs, don't add cache-busting (they're self-contained)
+    // For external URLs, add timestamp
+    let urlToUse = imageURL;
+    if (!imageURL.startsWith('data:')) {
+      const cacheId = new Date().getTime();
+      urlToUse = imageURL.includes('?') ? `${imageURL}&t=${cacheId}` : `${imageURL}?t=${cacheId}`;
+    }
+    console.log('Setting avatar preview:', { imageURL: imageURL.substring(0, 50), mode });
+    settingsAvatarPreview.style.backgroundImage = `url(${urlToUse})`;
     settingsAvatarPreview.style.setProperty('background-size', mode, 'important');
     settingsAvatarPreview.style.backgroundPosition = 'center';
     settingsAvatarPreview.style.backgroundRepeat = 'no-repeat';
@@ -223,7 +223,15 @@ function updateHeaderAvatar(imageURL, fitMode) {
   if (!headerAvatar) return;
   
   if (imageURL) {
-    headerAvatar.style.backgroundImage = `url(${imageURL})`;
+    // Clear old image first to prevent browser caching issues
+    headerAvatar.style.backgroundImage = '';
+    // For data URLs, don't add cache-busting (they're self-contained)
+    let urlToUse = imageURL;
+    if (!imageURL.startsWith('data:')) {
+      const cacheId = new Date().getTime();
+      urlToUse = imageURL.includes('?') ? `${imageURL}&t=${cacheId}` : `${imageURL}?t=${cacheId}`;
+    }
+    headerAvatar.style.backgroundImage = `url(${urlToUse})`;
     headerAvatar.style.setProperty('background-size', fitMode || 'cover', 'important');
     headerAvatar.style.backgroundPosition = 'center';
     headerAvatar.style.backgroundRepeat = 'no-repeat';
@@ -304,6 +312,11 @@ avatarRemoveBtn?.addEventListener('click', async () => {
       cacheProfileData(result.data.user); // Update cache after removal
     }
 
+    // Refresh chatbot avatar if chatbot instance exists
+    if (window.phishnetChatbot && typeof window.phishnetChatbot.refreshUserAvatarsInMessages === 'function') {
+      window.phishnetChatbot.refreshUserAvatarsInMessages();
+    }
+
     showNotification('Profile picture removed', 'success');
   } catch (err) {
     console.error(err);
@@ -327,23 +340,32 @@ avatarRemoveBtn?.addEventListener('click', async () => {
 // Define all functions first
 async function loadAndSyncProfile() {
   try {
-    // Check sessionStorage cache first for instant loading
-    const cachedUser = sessionStorage.getItem('phishnet_profile_cache');
-    if (cachedUser) {
-      const user = JSON.parse(cachedUser);
-      applyProfileToFormImmediate(user);
-      // Still fetch fresh data in background without blocking UI
-      fetchAndSyncProfileInBackground();
+    // Always fetch fresh data from server on page load to ensure latest image is shown
+    // This prevents showing stale cached images when avatar is updated
+    const result = await authFetch(`${apiBase}/users/profile`);
+    console.log('Profile fetched from server:', {
+      hasUser: !!result?.data?.user,
+      hasAvatar: !!result?.data?.user?.avatar,
+      avatarLength: result?.data?.user?.avatar ? result.data.user.avatar.length : 0,
+      avatarFirst50: result?.data?.user?.avatar ? result.data.user.avatar.substring(0, 50) : 'none'
+    });
+    
+    const user = result?.data?.user || getStoredUser();
+    syncUserState(user);
+    cacheProfileData(user);
+    
+    // CRITICAL: Ensure window.currentUserAvatar is set before displaying avatar
+    if (user && user.avatar) {
+      window.currentUserAvatar = user.avatar;
+      console.log('window.currentUserAvatar is now set');
     } else {
-      // No cache, fetch from server
-      const result = await authFetch(`${apiBase}/users/profile`);
-      const user = result?.data?.user || getStoredUser();
-      syncUserState(user);
-      cacheProfileData(user);
-      applyProfileToFormImmediate(user);
+      window.currentUserAvatar = null;
+      console.log('No avatar found - window.currentUserAvatar set to null');
     }
+    
+    applyProfileToFormImmediate(user);
   } catch (err) {
-    console.error(err);
+    console.error('Error loading profile:', err);
     // fall back to stored user
     applyProfileToForm(getStoredUser());
   }
@@ -368,7 +390,22 @@ async function fetchAndSyncProfileInBackground() {
 // Cache profile data in sessionStorage for instant subsequent loads
 function cacheProfileData(user) {
   try {
+    // Cache in sessionStorage for current session
     sessionStorage.setItem('phishnet_profile_cache', JSON.stringify(user));
+    
+    // Also update localStorage with user info including avatar for chatbot fallback
+    if (user) {
+      const userToStore = {
+        initials: user.initials || (user.firstName && user.lastName ? (user.firstName[0] + user.lastName[0]).toUpperCase() : ''),
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        avatar: user.avatar,
+        avatarFit: user.avatarFit
+      };
+      localStorage.setItem('phishnet_user', JSON.stringify(userToStore));
+      console.log('Cached user with avatar in localStorage:', { hasAvatar: !!user.avatar });
+    }
   } catch (err) {
     console.error('Cache error:', err);
   }
@@ -385,6 +422,8 @@ function applyProfileToFormImmediate(user = {}) {
     const fitMode = user.avatarFit || 'cover';
     currentAvatarURL = user.avatar;
     window.currentUserAvatar = user.avatar;
+    console.log('Avatar loaded:', { hasAvatar: !!user.avatar, avatarLength: user.avatar?.length });
+    
     // Set dropdown value FIRST
     if (avatarFitMode) {
       avatarFitMode.value = fitMode;
@@ -395,6 +434,7 @@ function applyProfileToFormImmediate(user = {}) {
   } else {
     currentAvatarURL = null;
     window.currentUserAvatar = null;
+    console.log('No avatar found for user');
     updateAvatarPreview(null);
     updateHeaderAvatar(null, null);
   }
@@ -455,7 +495,7 @@ function showNotification(message, type = 'info') {
     top: 20px;
     right: 20px;
     padding: 1rem 1.5rem;
-    background: ${type === 'success' ? 'var(--color-safe)' : type === 'error' ? 'var(--color-malicious)' : 'var(--primary-blue)'};
+    background: ${type === 'success' ? '#1E90FF' : type === 'error' ? 'var(--color-malicious)' : 'var(--primary-blue)'};
     color: white;
     border-radius: var(--radius-md);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
@@ -492,6 +532,15 @@ window.addEventListener('DOMContentLoaded', async () => {
         loadUserPreferences();
       })()
     ]);
+    
+    // After profile is loaded, refresh chatbot avatar if chatbot exists
+    // This ensures chatbot shows the latest avatar on settings page load
+    setTimeout(() => {
+      if (window.phishnetChatbot && typeof window.phishnetChatbot.refreshUserAvatarsInMessages === 'function') {
+        console.log('Refreshing chatbot avatars on settings page load');
+        window.phishnetChatbot.refreshUserAvatarsInMessages();
+      }
+    }, 100);
   } catch (err) {
     console.error('Initialization error:', err);
   }
@@ -513,7 +562,7 @@ function showNotification(message, type = 'info') {
     top: 20px;
     right: 20px;
     padding: 1rem 1.5rem;
-    background: ${type === 'success' ? 'var(--color-safe)' : type === 'error' ? 'var(--color-malicious)' : 'var(--primary-blue)'};
+    background: ${type === 'success' ? '#1E90FF' : type === 'error' ? 'var(--color-malicious)' : 'var(--primary-blue)'};
     color: white;
     border-radius: var(--radius-md);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
@@ -569,7 +618,62 @@ profileForm?.addEventListener('submit', async (e) => {
       }
     }
 
-    showNotification('Profile updated successfully!', 'success');
+    // Save avatar if it was changed (currentAvatarURL differs from saved avatar)
+    if (currentAvatarURL && currentAvatarURL !== result?.data?.user?.avatar) {
+      console.log('Saving avatar to server...', {
+        hasCurrentAvatar: !!currentAvatarURL,
+        savedAvatarDifferent: currentAvatarURL !== result?.data?.user?.avatar,
+        currentAvatarLength: currentAvatarURL.length,
+        savedAvatarLength: result?.data?.user?.avatar?.length
+      });
+      
+      const avatarResult = await authFetch(`${apiBase}/users/profile/avatar`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatar: currentAvatarURL, fitMode: avatarFitMode?.value || 'cover' }),
+      });
+
+      console.log('Avatar save response:', {
+        success: avatarResult?.success,
+        hasUser: !!avatarResult?.data?.user,
+        hasAvatar: !!avatarResult?.data?.user?.avatar,
+        avatarLength: avatarResult?.data?.user?.avatar?.length
+      });
+
+      if (avatarResult?.data?.user) {
+        console.log('Syncing user state and chatbot after avatar save');
+        syncUserState(avatarResult.data.user);
+        cacheProfileData(avatarResult.data.user);
+        
+        // IMPORTANT: Make sure window.currentUserAvatar is set
+        if (avatarResult.data.user.avatar) {
+          window.currentUserAvatar = avatarResult.data.user.avatar;
+          console.log('window.currentUserAvatar updated after save');
+        }
+      }
+
+      updateHeaderAvatar(currentAvatarURL, avatarFitMode?.value || 'cover');
+      
+      // Refresh chatbot avatar if chatbot instance exists
+      if (window.phishnetChatbot && typeof window.phishnetChatbot.refreshUserAvatarsInMessages === 'function') {
+        console.log('Calling chatbot.refreshUserAvatarsInMessages()');
+        window.phishnetChatbot.refreshUserAvatarsInMessages();
+      } else {
+        console.warn('Chatbot refresh method not available');
+      }
+    } else {
+      console.log('Avatar save skipped:', {
+        hasCurrentAvatar: !!currentAvatarURL,
+        isSameasSaved: currentAvatarURL === result?.data?.user?.avatar
+      });
+    }
+
+    console.log('Profile save complete. Final state:', {
+      windowCurrentUserAvatar: !!window.currentUserAvatar,
+      avatarLength: window.currentUserAvatar ? window.currentUserAvatar.length : 0
+    });
+    
+    showNotification('Profile updated successfully! Avatars syncing...', 'success');
   } catch (error) {
     console.error('Error updating profile:', error);
     showNotification(error.message || 'Failed to update profile', 'error');

@@ -7,7 +7,7 @@ class PhishNetChatbot {
   constructor() {
     this.isOpen = false;
     this.messages = [];
-    this.pendingAttachment = null;
+    this.pendingAttachments = []; // Changed to array to support multiple files
     this.init();
   }
 
@@ -43,7 +43,6 @@ class PhishNetChatbot {
       }
     });
     this.input.addEventListener('paste', (e) => this.handlePaste(e));
-    this.snapshotBtn.addEventListener('click', () => this.takeSnapshot());
     this.attachBtn.addEventListener('click', () => this.fileInput.click());
     this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
 
@@ -54,6 +53,13 @@ class PhishNetChatbot {
 
     // Load chat history from localStorage
     this.loadHistory();
+    
+    // Clean up old chat messages and set up auto-cleanup timer
+    this.cleanupOldMessages();
+    this.startAutoCleanupTimer();
+    
+    // Show chat duration notice after a short delay
+    setTimeout(() => this.showChatDurationNotice(), 800);
     this.refreshSeedBotAvatar();
   }
 
@@ -154,6 +160,7 @@ class PhishNetChatbot {
       this.fileInput = document.createElement('input');
       this.fileInput.type = 'file';
       this.fileInput.accept = 'image/png,image/jpeg,image/jpg,image/webp';
+      this.fileInput.multiple = true;
       this.fileInput.id = 'chatbot-file';
       this.fileInput.style.display = 'none';
       inputArea.appendChild(this.fileInput);
@@ -172,28 +179,47 @@ class PhishNetChatbot {
   }
 
   open() {
+    // Remove hidden and add opening animation
     this.window.classList.remove('hidden');
+    this.window.classList.remove('closing');
+    this.window.classList.add('opening');
     this.isOpen = true;
-    this.input.focus();
+    
+    // Focus input after animation starts
+    setTimeout(() => {
+      this.input?.focus();
+    }, 100);
+    
     this.scrollToBottom();
   }
 
   close() {
-    this.window.classList.add('hidden');
+    // Add closing animation, then add hidden class
+    this.window.classList.remove('opening');
+    this.window.classList.add('closing');
     this.isOpen = false;
+    
+    // Hide after animation completes (400ms)
+    setTimeout(() => {
+      this.window.classList.add('hidden');
+      this.window.classList.remove('closing');
+    }, 400);
   }
 
   async sendMessage() {
     const message = this.input.value.trim();
-    if (!message && !this.pendingAttachment) return;
+    if (!message && this.pendingAttachments.length === 0) return;
 
     // Disable input while processing
     this.input.disabled = true;
     this.sendBtn.disabled = true;
 
-    // Add user message with optional attachment preview
-    this.addMessage(message || '[Attachment]', 'user', this.pendingAttachment);
+    // Add user message with all attachments
+    this.addMessage(message || '[Attachments]', 'user', this.pendingAttachments);
     this.input.value = '';
+
+    // Clear attachments IMMEDIATELY after sending (before bot response)
+    this.clearAttachments();
 
     // Show typing indicator
     this.showTyping();
@@ -207,7 +233,7 @@ class PhishNetChatbot {
         },
         body: JSON.stringify({
           message,
-          attachment: this.pendingAttachment || null,
+          attachments: this.pendingAttachments.length > 0 ? this.pendingAttachments : null,
         }),
       });
 
@@ -234,8 +260,6 @@ class PhishNetChatbot {
 
     // Save to localStorage
     this.saveHistory();
-    // Clear attachment after sending
-    this.clearAttachment();
   }
 
   addMessage(text, sender, attachment = null) {
@@ -250,20 +274,39 @@ class PhishNetChatbot {
     } else {
       // User avatar - show profile picture if available, otherwise initials
       const userAvatar = this.getUserAvatarURL();
+      const userInitials = this.getUserInitials();
+      
+      // Debug logging
+      console.log('Adding user message to chatbot:', {
+        hasAvatar: !!userAvatar,
+        avatarLength: userAvatar ? userAvatar.length : 0,
+        avatarPreview: userAvatar ? userAvatar.substring(0, 50) : 'null',
+        userInitials: userInitials,
+        windowCurrentUserAvatar: !!window.currentUserAvatar,
+        windowAvatarLength: window.currentUserAvatar ? window.currentUserAvatar.length : 0
+      });
       
       if (userAvatar) {
-        // Display profile picture
-        avatar.style.backgroundImage = `url('${userAvatar}')`;
+        // Display profile picture with cache-busting timestamp to prevent stale images
+        const cacheId = new Date().getTime();
+        const urlWithCache = !userAvatar.startsWith('data:')
+          ? (userAvatar.includes('?') ? `${userAvatar}&t=${cacheId}` : `${userAvatar}?t=${cacheId}`)
+          : userAvatar;
+        avatar.style.backgroundImage = '';
+        avatar.style.backgroundImage = `url('${urlWithCache}')`;
         avatar.style.backgroundSize = 'cover';
         avatar.style.backgroundPosition = 'center';
         avatar.textContent = ''; // Clear text when showing image
       } else {
         // Fallback to initials or guest icon
-        const userInitials = this.getUserInitials();
         avatar.textContent = userInitials;
         avatar.style.fontSize = userInitials === '👤' ? '20px' : '12px';
       }
     }
+
+    // Create wrapper for content and attachments (allows top-right alignment)
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'message-wrapper';
 
     const content = document.createElement('div');
     content.className = 'message-content';
@@ -276,35 +319,69 @@ class PhishNetChatbot {
     }
     content.appendChild(p);
 
-    // Render attachment preview inside the message bubble (images only)
-    if (attachment && attachment.dataUrl) {
+    // Render attachment previews at TOP (above message text) - aligned to top-right
+    if (attachment && Array.isArray(attachment) && attachment.length > 0) {
+      // Multiple attachments
+      const attachmentContainer = document.createElement('div');
+      attachmentContainer.className = 'message-attachments-top';
+      
+      attachment.forEach(att => {
+        if (att && att.dataUrl) {
+          const preview = document.createElement('div');
+          preview.className = 'chatbot-attachment-thumb';
+          const img = document.createElement('img');
+          img.src = att.dataUrl;
+          img.alt = att.name || 'attachment';
+          preview.appendChild(img);
+          attachmentContainer.appendChild(preview);
+        }
+      });
+      
+      contentWrapper.appendChild(attachmentContainer);
+    } else if (attachment && attachment.dataUrl) {
+      // Single attachment (backward compatibility)
+      const attachmentContainer = document.createElement('div');
+      attachmentContainer.className = 'message-attachments-top';
       const preview = document.createElement('div');
       preview.className = 'chatbot-attachment-thumb';
       const img = document.createElement('img');
       img.src = attachment.dataUrl;
       img.alt = attachment.name || 'attachment';
       preview.appendChild(img);
-      const caption = document.createElement('div');
-      caption.className = 'chatbot-attachment-caption';
-      caption.textContent = attachment.name || 'Image';
-      preview.appendChild(caption);
-      content.appendChild(preview);
+      attachmentContainer.appendChild(preview);
+      contentWrapper.appendChild(attachmentContainer);
     }
 
+    // Add message content below attachments
+    contentWrapper.appendChild(content);
+
     messageDiv.appendChild(avatar);
-    messageDiv.appendChild(content);
+    messageDiv.appendChild(contentWrapper);
 
     this.messagesContainer.appendChild(messageDiv);
     this.scrollToBottom();
 
     // Store message
     this.messages.push({ text, sender, timestamp: new Date() });
+    
+    // Log when user message is added
+    if (sender === 'user') {
+      console.log('User message added to chatbot:', {
+        hasAvatar: !!this.getUserAvatarURL(),
+        avatarElementSet: avatar.style.backgroundImage !== '',
+        avatarElementText: avatar.textContent
+      });
+    }
   }
 
   handleFileSelect(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    this.processAttachmentFile(file);
+    const files = event.target.files;
+    if (!files) return;
+    
+    // Process up to 2 files
+    for (let i = 0; i < Math.min(files.length, 2); i++) {
+      this.processAttachmentFile(files[i]);
+    }
   }
 
   handlePaste(event) {
@@ -338,34 +415,65 @@ class PhishNetChatbot {
       return;
     }
 
+    // Check if we already have 2 attachments
+    if (this.pendingAttachments.length >= 2) {
+      alert('You can upload a maximum of 2 images at once.');
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
-      this.pendingAttachment = {
+      this.pendingAttachments.push({
         dataUrl: reader.result,
-        name: file.name || 'pasted-image.png',
+        name: file.name || 'image.png',
         mimeType: file.type,
-      };
+      });
       this.showAttachmentPreview();
     };
     reader.readAsDataURL(file);
   }
 
   showAttachmentPreview() {
-    if (!this.pendingAttachment || !this.attachmentPreview) return;
-    this.attachmentPreview.innerHTML = `
-      <div class="chatbot-attachment-chip">
-        <div class="chip-thumb" style="background-image:url('${this.pendingAttachment.dataUrl}')"></div>
-        <div class="chip-text">${this.pendingAttachment.name || 'Image attached'}</div>
-        <button class="chip-remove" aria-label="Remove attachment">×</button>
-      </div>
-    `;
+    if (!this.attachmentPreview || this.pendingAttachments.length === 0) return;
+    
+    // Create chips for all pending attachments
+    this.attachmentPreview.innerHTML = this.pendingAttachments
+      .map((attachment, index) => `
+        <div class="chatbot-attachment-chip">
+          <div class="chip-thumb" style="background-image:url('${attachment.dataUrl}')"></div>
+          <div class="chip-text">${attachment.name || 'Image'}</div>
+          <button class="chip-remove" data-index="${index}" aria-label="Remove attachment">×</button>
+        </div>
+      `)
+      .join('');
+    
     this.attachmentPreview.classList.remove('hidden');
-    const removeBtn = this.attachmentPreview.querySelector('.chip-remove');
-    removeBtn?.addEventListener('click', () => this.clearAttachment());
+    
+    // Add event listeners to all remove buttons
+    this.attachmentPreview.querySelectorAll('.chip-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt(e.target.getAttribute('data-index'));
+        this.removeAttachment(index);
+      });
+    });
+  }
+
+  removeAttachment(index) {
+    this.pendingAttachments.splice(index, 1);
+    if (this.pendingAttachments.length === 0) {
+      this.clearAttachments();
+    } else {
+      this.showAttachmentPreview();
+    }
   }
 
   clearAttachment() {
-    this.pendingAttachment = null;
+    // Keep this for backward compatibility
+    this.clearAttachments();
+  }
+
+  clearAttachments() {
+    this.pendingAttachments = [];
     if (this.fileInput) this.fileInput.value = '';
     if (this.attachmentPreview) {
       this.attachmentPreview.innerHTML = '';
@@ -375,11 +483,24 @@ class PhishNetChatbot {
 
   getUserAvatarURL() {
     try {
-      // Check if user has uploaded avatar
-      const userAvatar = localStorage.getItem('userAvatar');
-      if (userAvatar && userAvatar.trim()) {
-        return userAvatar;
+      // First priority: Check if user has avatar in window object (live updated from settings/profile)
+      if (window.currentUserAvatar && window.currentUserAvatar.trim()) {
+        console.log('getUserAvatarURL: Returning avatar from window.currentUserAvatar');
+        return window.currentUserAvatar;
       }
+      console.log('getUserAvatarURL: window.currentUserAvatar is empty/null, checking localStorage fallback');
+      
+      // Fallback: Check localStorage for avatar if window object hasn't been populated yet
+      // This can happen if avatar was saved and stored locally
+      const storedUser = JSON.parse(localStorage.getItem('phishnet_user') || '{}');
+      if (storedUser.avatar && storedUser.avatar.trim()) {
+        console.log('getUserAvatarURL: Found avatar in localStorage, will use it');
+        // Store it in window for future use
+        window.currentUserAvatar = storedUser.avatar;
+        return storedUser.avatar;
+      }
+      
+      console.log('getUserAvatarURL: No avatar found in window or localStorage');
     } catch (e) {
       console.error('Error getting user avatar:', e);
     }
@@ -419,6 +540,48 @@ class PhishNetChatbot {
     }
   }
 
+  // Refresh all user message avatars in the chatbot
+  // Call this when user profile picture is updated
+  refreshUserAvatarsInMessages() {
+    if (!this.messagesContainer) {
+      console.warn('refreshUserAvatarsInMessages: messagesContainer not found');
+      return;
+    }
+    
+    const userMessages = this.messagesContainer.querySelectorAll('.user-message .message-avatar');
+    console.log('refreshUserAvatarsInMessages: Found', userMessages.length, 'user message avatars');
+    
+    const newAvatarURL = this.getUserAvatarURL();
+    console.log('refreshUserAvatarsInMessages: New avatar URL:', {
+      hasAvatar: !!newAvatarURL,
+      length: newAvatarURL ? newAvatarURL.length : 0,
+      first50chars: newAvatarURL ? newAvatarURL.substring(0, 50) : 'none'
+    });
+    
+    userMessages.forEach((avatar, index) => {
+      if (newAvatarURL) {
+        // Update with new avatar image
+        const cacheId = new Date().getTime();
+        const urlWithCache = !newAvatarURL.startsWith('data:')
+          ? (newAvatarURL.includes('?') ? `${newAvatarURL}&t=${cacheId}` : `${newAvatarURL}?t=${cacheId}`)
+          : newAvatarURL;
+        avatar.style.backgroundImage = '';
+        avatar.style.backgroundImage = `url('${urlWithCache}')`;
+        avatar.style.backgroundSize = 'cover';
+        avatar.style.backgroundPosition = 'center';
+        avatar.textContent = ''; // Clear text when showing image
+        console.log(`Message ${index}: Avatar image updated`);
+      } else {
+        // Fallback to initials
+        const userInitials = this.getUserInitials();
+        avatar.style.backgroundImage = '';
+        avatar.textContent = userInitials;
+        avatar.style.fontSize = userInitials === '👤' ? '20px' : '12px';
+        console.log(`Message ${index}: Avatar fallback to initials: ${userInitials}`);
+      }
+    });
+  }
+
   scrollToBottom() {
     setTimeout(() => {
       this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
@@ -427,9 +590,15 @@ class PhishNetChatbot {
 
   saveHistory() {
     try {
+      // Add timestamp to each message if not already present
+      const messagesWithTimestamp = this.messages.map(msg => ({
+        ...msg,
+        timestamp: msg.timestamp || new Date().toISOString()
+      }));
       // Save only last 50 messages to prevent localStorage overflow
-      const recentMessages = this.messages.slice(-50);
+      const recentMessages = messagesWithTimestamp.slice(-50);
       localStorage.setItem('phishnet_chat_history', JSON.stringify(recentMessages));
+      localStorage.setItem('phishnet_chat_session_start', localStorage.getItem('phishnet_chat_session_start') || new Date().toISOString());
     } catch (e) {
       console.error('Error saving chat history:', e);
     }
@@ -438,7 +607,19 @@ class PhishNetChatbot {
   loadHistory() {
     try {
       const history = localStorage.getItem('phishnet_chat_history');
-      if (history) {
+      const sessionStart = localStorage.getItem('phishnet_chat_session_start');
+      
+      if (history && sessionStart) {
+        const sessionAge = (new Date() - new Date(sessionStart)) / (1000 * 60 * 60); // Age in hours
+        
+        // If session is older than 24 hours, clear it
+        if (sessionAge > 24) {
+          console.log('Chat session expired (older than 24 hours)');
+          localStorage.removeItem('phishnet_chat_history');
+          localStorage.removeItem('phishnet_chat_session_start');
+          return;
+        }
+        
         const messages = JSON.parse(history);
         // Load last 10 messages
         const recentMessages = messages.slice(-10);
@@ -451,6 +632,57 @@ class PhishNetChatbot {
       console.error('Error loading chat history:', e);
       // Clear corrupted history
       localStorage.removeItem('phishnet_chat_history');
+      localStorage.removeItem('phishnet_chat_session_start');
+    }
+  }
+
+  cleanupOldMessages() {
+    try {
+      const sessionStart = localStorage.getItem('phishnet_chat_session_start');
+      if (!sessionStart) return;
+      
+      const sessionAge = (new Date() - new Date(sessionStart)) / (1000 * 60 * 60); // Age in hours
+      
+      // If session is older than 24 hours, clear chat
+      if (sessionAge > 24) {
+        console.log('Clearing expired chat session');
+        localStorage.removeItem('phishnet_chat_history');
+        localStorage.removeItem('phishnet_chat_session_start');
+        this.messages = [];
+        this.updateMessageDisplay();
+      }
+    } catch (e) {
+      console.error('Error cleaning up old messages:', e);
+    }
+  }
+
+  startAutoCleanupTimer() {
+    // Check every 5 minutes if session has expired
+    setInterval(() => {
+      this.cleanupOldMessages();
+    }, 5 * 60 * 1000);
+  }
+
+  showChatDurationNotice() {
+    // Create and show a temporary notification about chat duration
+    const notice = document.createElement('div');
+    notice.className = 'chat-duration-notice';
+    notice.innerHTML = `
+      <div class="chat-notice-content">
+        <span class="notice-icon">⏱️</span>
+        <span class="notice-text">Chat history automatically clears after 24 hours</span>
+      </div>
+    `;
+    
+    const messagesContainer = this.messagesContainer;
+    if (messagesContainer && messagesContainer.firstChild) {
+      messagesContainer.insertBefore(notice, messagesContainer.firstChild);
+      
+      // Fade out and remove after 6 seconds
+      setTimeout(() => {
+        notice.style.animation = 'fadeOut 0.5s ease-out';
+        setTimeout(() => notice.remove(), 500);
+      }, 6000);
     }
   }
 

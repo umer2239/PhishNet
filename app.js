@@ -18,8 +18,17 @@ function showToast(message, type = 'info', duration = 3000) {
   // Remove all type classes
   toastElement.classList.remove('success', 'error', 'warning', 'info', 'show');
   
-  // Set message and type
-  toastElement.textContent = message;
+  // Icon symbols for each notification type
+  const icons = {
+    success: '✓',
+    error: '✕',
+    warning: '⚠',
+    info: 'ℹ'
+  };
+  
+  // Set message with icon and type
+  const icon = icons[type] || '•';
+  toastElement.innerHTML = `<span class="toast-icon" data-type="${type}">${icon}</span><span class="toast-message">${message}</span>`;
   toastElement.classList.add(type);
   
   // Trigger reflow to restart animation
@@ -82,11 +91,14 @@ class AuthManager {
         };
         localStorage.setItem(this.storageKey, JSON.stringify(user));
         localStorage.setItem('pishnet_user', JSON.stringify(user));
+        // Store avatar ONLY in window object for real-time access, NOT in localStorage
+        // This prevents stale avatar issues and storage quota problems
         if (user.avatar) {
-          localStorage.setItem('userAvatar', user.avatar);
+          window.currentUserAvatar = user.avatar;
           localStorage.setItem('avatarFitMode', user.avatarFit || 'cover');
         } else {
-          localStorage.removeItem('userAvatar');
+          window.currentUserAvatar = null;
+          localStorage.removeItem('avatarFitMode');
         }
         return user;
       } else {
@@ -102,6 +114,7 @@ class AuthManager {
     localStorage.removeItem('currentUser');
     localStorage.removeItem('userAvatar');
     localStorage.removeItem('avatarFitMode');
+    window.currentUserAvatar = null;
     window.location.href = 'index.html';
   }
 
@@ -191,11 +204,14 @@ class AuthManager {
         };
         localStorage.setItem(this.storageKey, JSON.stringify(user));
         localStorage.setItem('pishnet_user', JSON.stringify(user));
+        // Store avatar ONLY in window object for real-time access, NOT in localStorage
+        // This prevents stale avatar issues and storage quota problems
         if (user.avatar) {
-          localStorage.setItem('userAvatar', user.avatar);
+          window.currentUserAvatar = user.avatar;
           localStorage.setItem('avatarFitMode', user.avatarFit || 'cover');
         } else {
-          localStorage.removeItem('userAvatar');
+          window.currentUserAvatar = null;
+          localStorage.removeItem('avatarFitMode');
         }
         return user;
       } else {
@@ -230,12 +246,16 @@ class AuthManager {
         });
 
         // Store avatar in window object (not localStorage) to avoid storage quota issues
+        // ALWAYS fetch fresh from server to get latest avatar
         if (user.avatar) {
           window.currentUserAvatar = user.avatar;
           localStorage.setItem('avatarFitMode', user.avatarFit || 'cover');
+          // Remove stale localStorage avatar to force fresh fetches
+          localStorage.removeItem('userAvatar');
         } else {
           window.currentUserAvatar = null;
           localStorage.removeItem('avatarFitMode');
+          localStorage.removeItem('userAvatar');
         }
         
         // Apply avatar styling to all avatar elements
@@ -256,10 +276,17 @@ class AuthManager {
     const fitMode = user.avatarFit || 'cover';
     const avatarUrl = window.currentUserAvatar;
     
+    // Add cache-busting timestamp to prevent showing stale cached images
+    const cacheId = new Date().getTime();
+    const urlWithCache = avatarUrl && !avatarUrl.startsWith('data:') 
+      ? (avatarUrl.includes('?') ? `${avatarUrl}&t=${cacheId}` : `${avatarUrl}?t=${cacheId}`)
+      : avatarUrl;
+    
     // Update header avatar (.user-avatar)
     const headerAvatar = document.querySelector('.user-avatar');
     if (headerAvatar) {
-      headerAvatar.style.backgroundImage = `url(${avatarUrl})`;
+      headerAvatar.style.backgroundImage = '';
+      headerAvatar.style.backgroundImage = `url(${urlWithCache})`;
       headerAvatar.style.setProperty('background-size', fitMode, 'important');
       headerAvatar.style.backgroundPosition = 'center';
       headerAvatar.style.backgroundRepeat = 'no-repeat';
@@ -269,7 +296,8 @@ class AuthManager {
     // Update profile menu avatar (.profile-menu-avatar) if it exists
     const profileMenuAvatar = document.querySelector('.profile-menu-avatar');
     if (profileMenuAvatar) {
-      profileMenuAvatar.style.backgroundImage = `url(${avatarUrl})`;
+      profileMenuAvatar.style.backgroundImage = '';
+      profileMenuAvatar.style.backgroundImage = `url(${urlWithCache})`;
       profileMenuAvatar.style.setProperty('background-size', fitMode, 'important');
       profileMenuAvatar.style.backgroundPosition = 'center';
       profileMenuAvatar.style.backgroundRepeat = 'no-repeat';
@@ -279,7 +307,8 @@ class AuthManager {
     // Update settings avatar preview (.avatar-preview) if it exists
     const settingsAvatar = document.getElementById('settingsAvatarPreview');
     if (settingsAvatar) {
-      settingsAvatar.style.backgroundImage = `url(${avatarUrl})`;
+      settingsAvatar.style.backgroundImage = '';
+      settingsAvatar.style.backgroundImage = `url(${urlWithCache})`;
       settingsAvatar.style.setProperty('background-size', fitMode, 'important');
       settingsAvatar.style.backgroundPosition = 'center';
       settingsAvatar.style.backgroundRepeat = 'no-repeat';
@@ -306,7 +335,14 @@ class NavigationManager {
 
   async refreshProfileAndUpdate() {
     if (window.auth.isLoggedIn()) {
-      await window.auth.refreshProfile();
+      const user = await window.auth.refreshProfile();
+      // Ensure window.currentUserAvatar is set from fetched data
+      if (user && user.avatar) {
+        window.currentUserAvatar = user.avatar;
+        console.log('Avatar refreshed from server:', user.avatar.substring(0, 50));
+      } else {
+        window.currentUserAvatar = null;
+      }
       this.updateNavigation();
     }
   }
@@ -341,7 +377,13 @@ class NavigationManager {
         const savedFitMode = (user && user.avatarFit) || localStorage.getItem('avatarFitMode') || 'cover';
         
         if (savedAvatar) {
-          userAvatar.style.backgroundImage = `url(${savedAvatar})`;
+          // Add cache-busting timestamp to prevent showing stale cached images
+          const cacheId = new Date().getTime();
+          const urlWithCache = !savedAvatar.startsWith('data:')
+            ? (savedAvatar.includes('?') ? `${savedAvatar}&t=${cacheId}` : `${savedAvatar}?t=${cacheId}`)
+            : savedAvatar;
+          userAvatar.style.backgroundImage = '';
+          userAvatar.style.backgroundImage = `url(${urlWithCache})`;
           userAvatar.style.setProperty('background-size', savedFitMode, 'important');
           userAvatar.style.backgroundPosition = 'center';
           userAvatar.style.backgroundRepeat = 'no-repeat';
@@ -507,7 +549,13 @@ class NavigationManager {
 
     const avatarEl = menu.querySelector('.profile-menu-avatar');
     if (window.currentUserAvatar) {
-      avatarEl.style.backgroundImage = `url(${window.currentUserAvatar})`;
+      // Add cache-busting timestamp to prevent showing stale cached images
+      const cacheId = new Date().getTime();
+      const urlWithCache = !window.currentUserAvatar.startsWith('data:')
+        ? (window.currentUserAvatar.includes('?') ? `${window.currentUserAvatar}&t=${cacheId}` : `${window.currentUserAvatar}?t=${cacheId}`)
+        : window.currentUserAvatar;
+      avatarEl.style.backgroundImage = '';
+      avatarEl.style.backgroundImage = `url(${urlWithCache})`;
       avatarEl.style.setProperty('background-size', user?.avatarFit || 'cover', 'important');
       avatarEl.style.backgroundPosition = 'center';
       avatarEl.style.backgroundRepeat = 'no-repeat';
@@ -1115,34 +1163,47 @@ document.addEventListener('DOMContentLoaded', () => {
   const scanner = new ScanManager();
   const forms = new FormManager();
 
+  // Note: NavigationManager.init() calls refreshProfileAndUpdate() 
+  // which will fetch fresh user data including avatar from server
+  // window.currentUserAvatar will be set by refreshProfile() method
+
   // Force avatar update after navigation loads
   setTimeout(() => {
     const userAvatar = document.querySelector('.user-avatar');
-      const userObj = window.auth.getUser();
-      const savedAvatar = localStorage.getItem('userAvatar') || (userObj && userObj.avatar);
-      const savedFitMode = localStorage.getItem('avatarFitMode') || (userObj && userObj.avatarFit) || 'cover';
+    const userObj = window.auth.getUser();
     
-      console.log('Avatar Debug:', {
-        hasUserAvatar: !!userAvatar,
-        hasSavedAvatar: !!savedAvatar,
-        savedFitMode: savedFitMode,
-        isLoggedIn: !!userObj,
-        avatarLength: savedAvatar ? savedAvatar.length : 0
-      });
-    
-      if (userAvatar && userObj) {
-        if (savedAvatar) {
-          console.log('Applying saved avatar to header');
-        userAvatar.style.backgroundImage = `url(${savedAvatar})`;
-        userAvatar.style.setProperty('background-size', savedFitMode, 'important');
-        userAvatar.style.backgroundPosition = 'center';
-        userAvatar.style.backgroundRepeat = 'no-repeat';
-        userAvatar.textContent = '';
-        } else {
-          console.log('No saved avatar found, showing initials');
+    // ONLY use window.currentUserAvatar which is set by refreshProfile() from fresh server data
+    // Do NOT fall back to user.avatar from localStorage as it's stale
+    const savedAvatar = window.currentUserAvatar;
+    const savedFitMode = localStorage.getItem('avatarFitMode') || (userObj && userObj.avatarFit) || 'cover';
+  
+    console.log('Avatar display:', {
+      hasUserAvatar: !!userAvatar,
+      hasSavedAvatar: !!savedAvatar,
+      isLoggedIn: !!userObj,
+      usingWindowAvatar: !!window.currentUserAvatar,
+      isDataURL: savedAvatar ? savedAvatar.startsWith('data:') : false
+    });
+  
+    if (userAvatar && userObj && savedAvatar) {
+      console.log('Displaying fresh avatar from server');
+      let urlToUse = savedAvatar;
+      if (!savedAvatar.startsWith('data:')) {
+        const cacheId = new Date().getTime();
+        urlToUse = savedAvatar.includes('?') ? `${savedAvatar}&t=${cacheId}` : `${savedAvatar}?t=${cacheId}`;
       }
+      userAvatar.style.backgroundImage = '';
+      userAvatar.style.backgroundImage = `url(${urlToUse})`;
+      userAvatar.style.setProperty('background-size', savedFitMode, 'important');
+      userAvatar.style.backgroundPosition = 'center';
+      userAvatar.style.backgroundRepeat = 'no-repeat';
+      userAvatar.textContent = '';
+    } else if (userAvatar && userObj) {
+      // If no avatar, show initials
+      userAvatar.style.backgroundImage = '';
+      userAvatar.textContent = userObj.initials || 'JD';
     }
-  }, 100);
+  }, 800);  // Wait longer to ensure server fetch completes
 
   // Setup FAQ accordions
   document.querySelectorAll('.faq-question').forEach(question => {
