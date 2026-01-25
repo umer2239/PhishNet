@@ -219,7 +219,11 @@ class AuthManager {
     .then(response => {
       if (!response.ok) {
         return response.json().then(error => {
-          throw new Error(error.message || 'Registration failed');
+          const err = new Error(error.message || 'Registration failed');
+          // Propagate detailed validation errors from backend
+          err.errors = Array.isArray(error.errors) ? error.errors : [];
+          err.status = response.status;
+          throw err;
         });
       }
       return response.json();
@@ -1941,10 +1945,6 @@ class FormManager {
     const fName = document.querySelector('#firstName');
     const lName = document.querySelector('#lastName');
     const email = document.querySelector('#signup-email');
-    const phone = document.querySelector('#phone');
-    const company = document.querySelector('#company');
-    const securityQuestion = document.querySelector('#securityQuestion');
-    const securityAnswer = document.querySelector('#securityAnswer');
     const pwd = document.querySelector('#signup-password');
     const confirm = document.querySelector('#signup-confirm');
     const emailError = document.querySelector('#signupEmailError');
@@ -2049,10 +2049,6 @@ class FormManager {
       const first = fName ? fName.value.trim() : '';
       const last = lName ? lName.value.trim() : '';
       const em = email ? email.value.trim() : '';
-      const ph = phone ? phone.value.trim() : '';
-      const comp = company ? company.value.trim() : '';
-      const secQ = securityQuestion ? securityQuestion.value : '';
-      const secA = securityAnswer ? securityAnswer.value.trim() : '';
       const pw = pwd ? pwd.value : '';
       const conf = confirm ? confirm.value : '';
 
@@ -2074,9 +2070,6 @@ class FormManager {
       } else if (emailError) {
         emailError.style.display = 'none';
       }
-
-      if (!secQ) { showToast('Please select a security question', 'error'); if (securityQuestion) securityQuestion.focus(); return; }
-      if (!secA) { showToast('Please provide an answer to the security question', 'error'); if (securityAnswer) securityAnswer.focus(); return; }
 
       // password checks
       if (!pw || pw.length < 6) {
@@ -2116,10 +2109,6 @@ class FormManager {
         firstName: first,
         lastName: last,
         email: em,
-        phone: ph,
-        company: comp,
-        securityQuestion: secQ,
-        securityAnswer: secA,
         password: pw,
         confirmPassword: conf
       })
@@ -2134,10 +2123,41 @@ class FormManager {
           submitBtn.disabled = false;
           submitBtn.textContent = 'Create Account';
         }
-        if (emailError) {
+        const allErrors = Array.isArray(error.errors) ? error.errors : [];
+        const msg = error.message || '';
+        const isPwdMsg = /password/i.test(msg);
+        const isEmailMsg = /email/i.test(msg);
+        const passwordErrors = allErrors.filter(e => /password/i.test(e));
+        const emailErrorsList = allErrors.filter(e => /email/i.test(e) || /invalid email/i.test(e));
+
+        // Route errors to appropriate field containers
+        if (pwdError && (isPwdMsg || passwordErrors.length > 0)) {
+          pwdError.style.display = 'block';
+          const lines = [];
+          if (isPwdMsg) lines.push(msg);
+          lines.push(...passwordErrors);
+          pwdError.innerHTML = lines.join('<br>') || 'Password does not meet requirements.';
+        } else if (pwdError) {
+          pwdError.style.display = 'none';
+        }
+
+        if (emailError && (isEmailMsg || emailErrorsList.length > 0)) {
           emailError.style.display = 'block';
-          emailError.textContent = error.message || 'Registration failed. Please try again.';
-        } else {
+          const lines = [];
+          if (isEmailMsg) lines.push(msg);
+          lines.push(...emailErrorsList);
+          emailError.innerHTML = lines.join('<br>') || 'Please check your email input.';
+        } else if (emailError) {
+          // If message is generic, show it once in email error to avoid losing context
+          if (!isPwdMsg && !isEmailMsg && allErrors.length === 0) {
+            emailError.style.display = 'block';
+            emailError.textContent = error.message || 'Registration failed. Please try again.';
+          } else {
+            emailError.style.display = 'none';
+          }
+        }
+
+        if (!pwdError && !emailError) {
           showToast(error.message || 'Registration failed. Please try again', 'error');
         }
       });

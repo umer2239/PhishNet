@@ -85,7 +85,10 @@
   border: none;
   border-radius: 50%;
   cursor: pointer;
-  box-shadow: 0 8px 32px rgba(11, 99, 217, 0.5);
+  box-shadow: 
+    0 8px 32px rgba(11, 99, 217, 0.5),
+    0 0 20px rgba(0, 255, 136, 0.3),
+    0 0 40px rgba(11, 99, 217, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -93,7 +96,47 @@
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   animation: floatPulse 2.5s ease-in-out infinite;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+}
+
+/* Gradient glow border wrapper */
+.chatbot-icon::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  right: -5px;
+  bottom: -5px;
+  background: conic-gradient(
+    from 0deg,
+    #00FF88,
+    #0B63D9,
+    #00B7D9,
+    #00FF88
+  );
+  border-radius: 50%;
+  z-index: -1;
+  opacity: 0.7;
+  filter: blur(12px);
+  animation: pulseGlow 2s ease-in-out infinite, rotateGlow 4s linear infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes rotateGlow {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .chatbot-icon::before {

@@ -166,6 +166,62 @@ app.use('/api/chatbot', chatbotRoutes);
 // Blog routes (public - no auth required, auto-updated from RSS)
 app.use('/api/blogs', blogRoutes);
 
+// Public analytics endpoint (for About Us page stats)
+app.get('/api/analytics/platform-stats', async (req, res, next) => {
+  try {
+    const Analytics = require('./models/Analytics');
+    const User = require('./models/User');
+    
+    const analytics = await Analytics.getAnalytics();
+    
+    // Calculate active users (users who logged in within last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const activeUsersCount = await User.countDocuments({
+      isActive: true,
+      lastLogin: { $gte: thirtyDaysAgo }
+    });
+    
+    // Also get total users count
+    const totalUsers = await User.countDocuments({ isActive: true });
+
+    // Get today's scan count directly from scan history
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const scansToday = await URLCheckHistory.countDocuments({ checkedAt: { $gte: today } });
+
+    // Compute detection rate for the last 6 months from actual scan records (URL + Email)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setDate(sixMonthsAgo.getDate() - 180);
+    const totalScans6m = await URLCheckHistory.countDocuments({ checkedAt: { $gte: sixMonthsAgo } });
+    const threats6m = await URLCheckHistory.countDocuments({ checkedAt: { $gte: sixMonthsAgo }, isSafe: false });
+    const detectionRate6m = totalScans6m > 0 ? parseFloat(((threats6m / totalScans6m) * 100).toFixed(1)) : 0;
+
+    res.status(200).json({
+      success: true,
+      message: 'Platform statistics retrieved successfully',
+      data: {
+        totalUsersOnboarded: totalUsers,
+        activeUsers: activeUsersCount,
+        totalUrlsChecked: analytics.totalUrlsChecked,
+        scansToday: scansToday,
+        scansLastSixMonths: totalScans6m,
+        threatsLastSixMonths: threats6m,
+        detectionRateLastSixMonths: detectionRate6m,
+        totalPhishingUrlsDetected: analytics.totalPhishingUrlsDetected,
+        totalUnsafeUrlsDetected: analytics.totalUnsafeUrlsDetected,
+        totalThreatUrlsDetected: analytics.totalThreatUrlsDetected,
+        totalSafeWebsitesVisited: analytics.totalSafeWebsitesVisited,
+        totalProtectionWarnings: analytics.totalProtectionWarnings,
+        platformThreatDetectionRate: analytics.platformThreatDetectionRate,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Protected routes - require authentication
 app.use('/api/users', authMiddleware, uploadLimiter, userRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRoutes);

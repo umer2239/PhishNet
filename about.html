@@ -189,24 +189,84 @@
         <h2 style="text-align: center; margin-bottom: 3rem;">Our Impact</h2>
         <div class="grid grid-4">
           <div style="text-align: center;">
-            <div style="font-size: 3rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">10M+</div>
-            <p style="color: var(--text-muted);">Scans Performed</p>
+            <div id="total-scans" style="font-size: 3rem; font-weight: 700; color: var(--accent-green); margin-bottom: 0.5rem;">-</div>
+            <p style="color: var(--text-muted);">Total URLs Scanned</p>
           </div>
           <div style="text-align: center;">
-            <div style="font-size: 3rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">500K+</div>
-            <p style="color: var(--text-muted);">Threats Blocked</p>
+            <div id="scans-today" style="font-size: 3rem; font-weight: 700; color: var(--accent-green); margin-bottom: 0.5rem;">-</div>
+            <p style="color: var(--text-muted);">Scans Today</p>
           </div>
           <div style="text-align: center;">
-            <div style="font-size: 3rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">50K+</div>
+            <div id="active-users" style="font-size: 3rem; font-weight: 700; color: var(--accent-green); margin-bottom: 0.5rem;">-</div>
             <p style="color: var(--text-muted);">Active Users</p>
           </div>
           <div style="text-align: center;">
-            <div style="font-size: 3rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">95%+</div>
-            <p style="color: var(--text-muted);">Detection Accuracy</p>
+            <div id="detection-rate" style="font-size: 3rem; font-weight: 700; color: var(--accent-green); margin-bottom: 0.5rem;">-</div>
+            <p style="color: var(--text-muted);">Detection Rate</p>
           </div>
         </div>
       </div>
     </section>
+
+    <script>
+      // Fetch real analytics data from backend
+      async function loadImpactStats() {
+        try {
+          const response = await fetch('/api/analytics/platform-stats');
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          if (!data.success || !data.data) {
+            throw new Error('Invalid response format');
+          }
+          
+          const stats = data.data;
+
+          // Format numbers with K/M suffix
+          const formatNumber = (num) => {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M+';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K+';
+            return num.toString();
+          };
+
+
+          // Use backend-computed platform detection rate (stored in Analytics)
+          // Prefer 6-month detection rate if available; otherwise fallback to platform average
+          const rate6m = stats.detectionRateLastSixMonths;
+          const detectionAccuracy = typeof rate6m === 'number'
+            ? rate6m.toFixed(1)
+            : (typeof stats.platformThreatDetectionRate === 'number' ? stats.platformThreatDetectionRate.toFixed(1) : '0.0');
+
+          // Update DOM
+          document.getElementById('total-scans').textContent = formatNumber(stats.totalUrlsChecked || 0);
+          document.getElementById('scans-today').textContent = formatNumber(stats.scansToday || 0);
+          document.getElementById('active-users').textContent = formatNumber(stats.activeUsers || 0);
+          document.getElementById('detection-rate').textContent = detectionAccuracy + '%';
+
+          console.log('Analytics loaded successfully:', stats);
+
+        } catch (error) {
+          console.error('Error loading impact stats:', error);
+          
+          // Show error message in console for debugging
+          console.log('Failed to fetch from /api/analytics/platform-stats');
+          console.log('Make sure the backend server is running on the same domain/port');
+          
+          // Show 0 values instead of dash when backend is unavailable
+          document.getElementById('total-scans').textContent = '0';
+          document.getElementById('scans-today').textContent = '0';
+          document.getElementById('active-users').textContent = '0';
+          document.getElementById('detection-rate').textContent = '0%';
+        }
+      }
+
+      // Load stats when page loads
+      document.addEventListener('DOMContentLoaded', loadImpactStats);
+    </script>
 
     <!-- CTA Section -->
     <section style="background: var(--bg-secondary);">

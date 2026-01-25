@@ -19,11 +19,8 @@ const validatePassword = (password) => {
   if (!/[a-z]/.test(password)) {
     errors.push('Password must contain at least one lowercase letter');
   }
-  if (!/[0-9]/.test(password)) {
-    errors.push('Password must contain at least one number');
-  }
-  if (!/[!@#$%^&*]/.test(password)) {
-    errors.push('Password must contain at least one special character (!@#$%^&*)');
+  if (!/[0-9!@#$%^&*]/.test(password)) {
+    errors.push('Password must contain at least one number or special character (!@#$%^&*)');
   }
 
   return {

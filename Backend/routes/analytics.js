@@ -292,4 +292,29 @@ router.get('/overview', authMiddleware, adminMiddleware, async (req, res, next) 
   }
 });
 
+// ======================== GET PLATFORM STATS (PUBLIC) ========================
+router.get('/platform-stats', async (req, res, next) => {
+  try {
+    const analytics = await Analytics.getAnalytics();
+
+    res.status(200).json({
+      success: true,
+      message: 'Platform statistics retrieved successfully',
+      data: {
+        totalUsersOnboarded: analytics.totalUsersOnboarded,
+        activeUsers: analytics.activeUsers,
+        totalUrlsChecked: analytics.totalUrlsChecked,
+        totalPhishingUrlsDetected: analytics.totalPhishingUrlsDetected,
+        totalUnsafeUrlsDetected: analytics.totalUnsafeUrlsDetected,
+        totalThreatUrlsDetected: analytics.totalThreatUrlsDetected,
+        totalSafeWebsitesVisited: analytics.totalSafeWebsitesVisited,
+        totalProtectionWarnings: analytics.totalProtectionWarnings,
+        platformThreatDetectionRate: analytics.platformThreatDetectionRate,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

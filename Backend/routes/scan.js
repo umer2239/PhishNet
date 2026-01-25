@@ -97,6 +97,15 @@ router.post('/url', optionalAuthMiddleware, async (req, res, next) => {
       await analytics.updateTopPhishingDomains(domain);
     }
 
+    // Update daily statistics
+    await analytics.updateDailyStats({
+      urlsChecked: 1,
+      threatsDetected: safetyCheck.isSafe ? 0 : 1,
+      protectionWarnings: safetyCheck.isSafe ? 0 : 1,
+    });
+
+    console.log(`[SCAN-URL] Daily stats after update:`, analytics.dailyStats);
+
     res.status(200).json({
       success: true,
       message: threatData.isSafe ? 'URL is safe' : 'URL appears to be unsafe or phishing',
@@ -230,11 +239,23 @@ router.post('/email', optionalAuthMiddleware, async (req, res, next) => {
     if (isSafeEmail) {
       await analytics.updatePlatformMetrics({ safeWebsites: 1 });
     } else {
-      await analytics.updatePlatformMetrics({
-        phishingUrls: 1,
-        protectionWarnings: 1,
-      });
+      // Categorize email threat properly (phishing, unsafe, or suspicious)
+      const emailThreatType = isSuspiciousSender ? 'phishing' : 'unsafe';
+      const metrics = { protectionWarnings: 1 };
+      if (emailThreatType === 'phishing') {
+        metrics.phishingUrls = 1;
+      } else {
+        metrics.unsafeUrls = 1;
+      }
+      await analytics.updatePlatformMetrics(metrics);
     }
+
+    // Update daily statistics
+    await analytics.updateDailyStats({
+      urlsChecked: 1,
+      threatsDetected: isSafeEmail ? 0 : 1,
+      protectionWarnings: isSafeEmail ? 0 : 1,
+    });
 
     res.status(200).json({
       success: true,
@@ -348,6 +369,13 @@ router.post('/batch', authMiddleware, async (req, res, next) => {
     await analytics.updatePlatformMetrics({
       safeWebsites: safeCount,
       unsafeUrls: unsafeCount,
+      protectionWarnings: unsafeCount,
+    });
+
+    // Update daily statistics
+    await analytics.updateDailyStats({
+      urlsChecked: urls.length,
+      threatsDetected: unsafeCount,
       protectionWarnings: unsafeCount,
     });
 

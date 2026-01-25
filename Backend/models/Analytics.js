@@ -173,14 +173,15 @@ analyticsSchema.methods.updatePlatformMetrics = async function (
   this.totalSafeWebsitesVisited += safeWebsites;
   this.totalProtectionWarnings += protectionWarnings;
 
-  // Recalculate totals
+  // Recalculate totals (includes both URL and email scans)
   this.totalUrlsChecked =
     this.totalPhishingUrlsDetected +
     this.totalUnsafeUrlsDetected +
     this.totalThreatUrlsDetected +
     this.totalSafeWebsitesVisited;
 
-  // Calculate threat detection rate
+  // Calculate threat detection rate (% of scans that found threats)
+  // This includes both URL and email scans
   const threatsDetected =
     this.totalPhishingUrlsDetected +
     this.totalUnsafeUrlsDetected +
@@ -196,15 +197,16 @@ analyticsSchema.methods.updatePlatformMetrics = async function (
   return await this.save();
 };
 
-// Update daily statistics
+// Update daily statistics (stable: ISO date compare + markModified)
 analyticsSchema.methods.updateDailyStats = async function (dailyMetrics) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const todayISODate = today.toISOString().split('T')[0]; // YYYY-MM-DD
 
-  let dailyRecord = this.dailyStats.find(
-    (stat) =>
-      new Date(stat.date).getTime() === today.getTime()
-  );
+  let dailyRecord = this.dailyStats.find((stat) => {
+    const statISODate = new Date(stat.date).toISOString().split('T')[0];
+    return statISODate === todayISODate;
+  });
 
   if (!dailyRecord) {
     dailyRecord = {
@@ -232,6 +234,8 @@ analyticsSchema.methods.updateDailyStats = async function (dailyMetrics) {
     (stat) => new Date(stat.date) >= ninetyDaysAgo
   );
 
+  // Ensure mongoose persists array changes
+  this.markModified('dailyStats');
   this.lastUpdated = new Date();
   return await this.save();
 };
