@@ -19,6 +19,7 @@ class PhishNetChatbot {
     this.messagesContainer = document.getElementById('chatbot-messages');
     this.input = document.getElementById('chatbot-input');
     this.sendBtn = document.getElementById('chatbot-send');
+    this.greetingBubble = document.getElementById('chatbot-greeting');
     // Attach button and file input are added if missing to avoid editing all pages
     this.attachBtn = document.getElementById('chatbot-attach');
     this.fileInput = document.getElementById('chatbot-file');
@@ -27,6 +28,14 @@ class PhishNetChatbot {
     this.snapshotBtn = document.getElementById('chatbot-snapshot');
 
     if (!this.toggleBtn) return; // Exit if chatbot not present on page
+
+    // Make greeting bubble clickable to open chatbot
+    if (this.greetingBubble) {
+      this.greetingBubble.addEventListener('click', () => {
+        this.open();
+      });
+      this.greetingBubble.style.cursor = 'pointer';
+    }
 
     // Event Listeners
     // Inject attachment controls if not present
@@ -184,6 +193,11 @@ class PhishNetChatbot {
     this.window.classList.remove('closing');
     this.window.classList.add('opening');
     this.isOpen = true;
+    
+    // Hide greeting bubble when opening chatbot
+    if (this.greetingBubble) {
+      this.greetingBubble.classList.add('hidden');
+    }
     
     // Focus input after animation starts
     setTimeout(() => {

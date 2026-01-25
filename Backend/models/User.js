@@ -60,6 +60,12 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Admin flag
+    isAdmin: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     verificationToken: {
       type: String,
       select: false,

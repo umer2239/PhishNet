@@ -3,7 +3,7 @@ const router = express.Router();
 const Analytics = require('../models/Analytics');
 const User = require('../models/User');
 const URLCheckHistory = require('../models/URLCheckHistory');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 
 // ======================== GET DASHBOARD SUMMARY ========================
 router.get('/dashboard', authMiddleware, async (req, res, next) => {
@@ -40,7 +40,7 @@ router.get('/dashboard', authMiddleware, async (req, res, next) => {
 });
 
 // ======================== GET TRENDING DATA ========================
-router.get('/trends', authMiddleware, async (req, res, next) => {
+router.get('/trends', authMiddleware, adminMiddleware, async (req, res, next) => {
   try {
     const { days = 30 } = req.query;
 
@@ -71,7 +71,7 @@ router.get('/trends', authMiddleware, async (req, res, next) => {
 });
 
 // ======================== GET PLATFORM SUMMARY ========================
-router.get('/summary', authMiddleware, async (req, res, next) => {
+router.get('/summary', authMiddleware, adminMiddleware, async (req, res, next) => {
   try {
     const analytics = await Analytics.getAnalytics();
 
@@ -86,7 +86,7 @@ router.get('/summary', authMiddleware, async (req, res, next) => {
 });
 
 // ======================== GET TOP PHISHING DOMAINS ========================
-router.get('/top-domains', authMiddleware, async (req, res, next) => {
+router.get('/top-domains', authMiddleware, adminMiddleware, async (req, res, next) => {
   try {
     const { limit = 10 } = req.query;
 
@@ -106,7 +106,7 @@ router.get('/top-domains', authMiddleware, async (req, res, next) => {
 });
 
 // ======================== GET DANGEROUS URLS TODAY ========================
-router.get('/dangerous-today', authMiddleware, async (req, res, next) => {
+router.get('/dangerous-today', authMiddleware, adminMiddleware, async (req, res, next) => {
   try {
     const dangerousUrls = await URLCheckHistory.getDangerousUrlsToday();
 
@@ -124,7 +124,7 @@ router.get('/dangerous-today', authMiddleware, async (req, res, next) => {
 });
 
 // ======================== GET USER RANKING ========================
-router.get('/rankings', authMiddleware, async (req, res, next) => {
+router.get('/rankings', authMiddleware, adminMiddleware, async (req, res, next) => {
   try {
     const { type = 'urls_checked', limit = 10 } = req.query;
 
@@ -167,7 +167,7 @@ router.get('/rankings', authMiddleware, async (req, res, next) => {
 });
 
 // ======================== GET THREAT DISTRIBUTION ========================
-router.get('/threat-distribution', authMiddleware, async (req, res, next) => {
+router.get('/threat-distribution', authMiddleware, adminMiddleware, async (req, res, next) => {
   try {
     const distribution = await URLCheckHistory.aggregate([
       {
@@ -204,7 +204,7 @@ router.get('/threat-distribution', authMiddleware, async (req, res, next) => {
 });
 
 // ======================== GET RECENT ACTIVITY (PLATFORM) ========================
-router.get('/recent-activity', authMiddleware, async (req, res, next) => {
+router.get('/recent-activity', authMiddleware, adminMiddleware, async (req, res, next) => {
   try {
     const { limit = 20 } = req.query;
 
@@ -228,7 +228,7 @@ router.get('/recent-activity', authMiddleware, async (req, res, next) => {
 });
 
 // ======================== GET ANALYTICS OVERVIEW ========================
-router.get('/overview', authMiddleware, async (req, res, next) => {
+router.get('/overview', authMiddleware, adminMiddleware, async (req, res, next) => {
   try {
     const analytics = await Analytics.getAnalytics();
 

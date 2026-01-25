@@ -23,6 +23,8 @@ const userRoutes = require('./routes/users');
 const scanRoutes = require('./routes/scan');
 const analyticsRoutes = require('./routes/analytics');
 const chatbotRoutes = require('./routes/chatbot');
+const blogRoutes = require('./routes/blog');
+const dashboardRoutes = require('./routes/dashboard');
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
@@ -37,15 +39,47 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc: ["'self'", 'data:'],
-      connectSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+      imgSrc: [
+        "'self'", 
+        'data:', 
+        'blob:',
+        'https:',
+        'https://feeds.feedburner.com', 
+        'https://www.bleepingcomputer.com',
+        'https://*.thehackernews.com',
+        'https://*.bleepstatic.com',
+        'https://*.cloudfront.net', 
+        'https://*.akamaized.net', 
+        'https://*.cdn.net'
+      ],
+      connectSrc: [
+        "'self'", 
+        'https://cdn.jsdelivr.net', 
+        'https://feeds.feedburner.com', 
+        'https://www.bleepingcomputer.com',
+        'https://api.allorigins.win'  // For CORS proxy fallback
+      ],
       frameSrc: ["'none'"],
     }
   }
 }));
+
+// Force-set CSP header to ensure no invalid sources remain in responses
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https: https://feeds.feedburner.com https://www.bleepingcomputer.com https://*.thehackernews.com https://*.bleepstatic.com https://*.cloudfront.net https://*.akamaized.net https://*.cdn.net",
+    "connect-src 'self' https://cdn.jsdelivr.net https://feeds.feedburner.com https://www.bleepingcomputer.com https://api.allorigins.win",
+    "frame-src 'none'"
+  ].join('; '));
+  next();
+});
 
 // Body parser middleware
 app.use(express.json({ limit: '10mb' }));
@@ -129,9 +163,13 @@ app.use('/api/scan', scanRoutes);
 // Chatbot routes (public - works for both logged in and guest users)
 app.use('/api/chatbot', chatbotRoutes);
 
+// Blog routes (public - no auth required, auto-updated from RSS)
+app.use('/api/blogs', blogRoutes);
+
 // Protected routes - require authentication
 app.use('/api/users', authMiddleware, uploadLimiter, userRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRoutes);
+app.use('/api/dashboard', authMiddleware, dashboardRoutes);
 
 // ======================== ROOT ROUTE ========================
 app.get('/', (req, res) => {

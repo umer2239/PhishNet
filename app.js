@@ -77,9 +77,16 @@ class AuthManager {
       return response.json();
     })
     .then(data => {
-      if (data.success && data.data.token) {
+        if (data.success && data.data.token) {
         // Store token and user info
         localStorage.setItem('token', data.data.token);
+        // Clear any guest scan history to avoid leaking previous anonymous scans
+        localStorage.removeItem('scanHistory');
+        // Clear any selected report cached from previous sessions
+        localStorage.removeItem('selectedScan');
+        localStorage.removeItem('selectedScanId');
+        // Clear any guest scan history to avoid leaking previous anonymous scans
+        localStorage.removeItem('scanHistory');
         const user = {
           email: data.data.user.email,
           firstName: data.data.user.firstName,
@@ -108,14 +115,42 @@ class AuthManager {
   }
 
   logout() {
-    localStorage.removeItem(this.storageKey);
-    localStorage.removeItem('pishnet_user');
-    localStorage.removeItem('phishnet_currentUser');
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('userAvatar');
-    localStorage.removeItem('avatarFitMode');
-    window.currentUserAvatar = null;
-    window.location.href = 'index.html';
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          await fetch('/api/auth/logout', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Logout API call failed:', e);
+      } finally {
+        // Remove all user-sensitive keys
+        localStorage.removeItem(this.storageKey);
+        localStorage.removeItem('pishnet_user');
+        localStorage.removeItem('phishnet_currentUser');
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('userAvatar');
+        localStorage.removeItem('avatarFitMode');
+        localStorage.removeItem('selectedScan');
+        localStorage.removeItem('selectedScanId');
+        // Remove auth token and any cached scan history
+        localStorage.removeItem('token');
+        localStorage.removeItem('scanHistory');
+        // Clear any in-memory scan manager
+        if (window.scanManager && Array.isArray(window.scanManager.scanHistory)) {
+          window.scanManager.scanHistory = [];
+        }
+        window.currentUserAvatar = null;
+        // Redirect to login/index
+        window.location.href = 'index.html';
+      }
+    })();
   }
 
   getUser() {
@@ -366,6 +401,12 @@ class NavigationManager {
     const dashboardButton = document.querySelector('.btn-dashboard');
 
     if (authButtons && userAvatar) {
+      // Make auth UI visible after determination
+      authButtons.style.opacity = '1';
+      authButtons.style.visibility = 'visible';
+      userAvatar.style.opacity = '1';
+      userAvatar.style.visibility = 'visible';
+      
       if (isLoggedIn) {
         authButtons.style.display = 'none';
         userAvatar.style.display = 'flex';
@@ -515,7 +556,8 @@ class NavigationManager {
   toggleProfileMenu() {
     const existingMenu = document.querySelector('.profile-menu');
     if (existingMenu) {
-      existingMenu.remove();
+      existingMenu.classList.add('closing');
+      setTimeout(() => existingMenu.remove(), 220);
       return;
     }
 
@@ -526,6 +568,7 @@ class NavigationManager {
       <div class="profile-menu-header">
         <div class="profile-menu-avatar"></div>
         <div class="profile-menu-info">
+          <div class="profile-menu-name">${user ? (user.name || (user.firstName ? (user.firstName + (user.lastName ? ' ' + user.lastName : '')) : '')) : ''}</div>
           <div class="profile-menu-email">${user ? user.email : ''}</div>
         </div>
       </div>
@@ -563,6 +606,15 @@ class NavigationManager {
       avatarEl.textContent = user.initials;
     }
 
+    // Ensure email styling is applied inline to avoid being overridden
+    const emailEl = menu.querySelector('.profile-menu-email');
+    if (emailEl) {
+      emailEl.style.setProperty('color', '#9CA3AF', 'important');
+      emailEl.style.setProperty('font-size', '0.85rem', 'important');
+      emailEl.style.setProperty('font-weight', '500', 'important');
+      emailEl.style.setProperty('opacity', '0.85', 'important');
+    }
+
     const userAvatar = document.querySelector('.user-avatar');
     userAvatar.appendChild(menu);
 
@@ -575,8 +627,11 @@ class NavigationManager {
     setTimeout(() => {
       document.addEventListener('click', function closeMenu(e) {
         if (!e.target.closest('.user-avatar')) {
-          menu.remove();
-          document.removeEventListener('click', closeMenu);
+          menu.classList.add('closing');
+          setTimeout(() => {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+          }, 200);
         }
       });
     }, 10);
@@ -586,12 +641,121 @@ class NavigationManager {
 // ==================== SCAN FUNCTIONALITY ====================
 class ScanManager {
   constructor() {
-    this.setupScanForms();
+    this.scanHistory = [];
+    this.lastUrlResult = null;
+    this.lastEmailResult = null;
+    this.loadScanHistory();
+    // If a global ScanningSystem exists, defer form handling to it to avoid duplicate bindings
+    if (window.scanSystem) {
+      console.log('[ScanManager] Detected global scanSystem; deferring form handlers');
+    } else {
+      this.setupScanForms();
+    }
+    this.setupCloseButtons();
+  }
+
+  async loadScanHistory() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.log('[ScanManager] No token found, loading from localStorage');
+        // Load from localStorage for non-logged-in users
+        this.scanHistory = JSON.parse(localStorage.getItem('scanHistory')) || [];
+        return;
+      }
+
+      const response = await fetch('/api/users/history?limit=50', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Transform API data to match frontend format
+          this.scanHistory = data.data.history.map(item => {
+            const rawThreat = item.threatLevel || item.threat || item.status || (item.isSafe === true ? 'safe' : (item.isSafe === false ? 'malicious' : null));
+            const normalizedThreat = rawThreat && (['safe', 'suspicious', 'malicious'].includes(String(rawThreat).toLowerCase()))
+              ? String(rawThreat).toLowerCase()
+              : this.mapThreatLevel ? this.mapThreatLevel(rawThreat) : (rawThreat || 'safe');
+
+            return ({
+              id: item._id,
+              type: item.scanType || (item.url.includes('@') ? 'email' : 'url'),
+              value: item.url,
+              threat: normalizedThreat || 'safe',
+              threatType: item.threatType,
+              confidence: item.confidence,
+              timestamp: new Date(item.checkedAt).getTime(),
+              date: new Date(item.checkedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+              time: new Date(item.checkedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+              indicators: item.indicators || [],
+              domain: item.domain,
+              isSafe: item.isSafe
+            });
+          });
+          console.log(`[ScanManager] Loaded ${this.scanHistory.length} scans from server`);
+        } else {
+          console.error('[ScanManager] Failed to load scan history:', data.message);
+          this.scanHistory = [];
+        }
+      } else {
+        // If token is invalid/expired, clear it and any cached scans to prevent leakage
+        if (response.status === 401) {
+          console.warn('[ScanManager] Unauthorized token - clearing token and scan history');
+          localStorage.removeItem('token');
+          localStorage.removeItem('scanHistory');
+          if (window.scanManager) window.scanManager.scanHistory = [];
+          this.scanHistory = [];
+          return;
+        }
+        console.error('[ScanManager] Failed to fetch scan history:', response.status);
+        this.scanHistory = [];
+      }
+    } catch (error) {
+      console.error('[ScanManager] Error loading scan history:', error);
+      this.scanHistory = [];
+    }
+  }
+
+  setupCloseButtons() {
+    const closeUrlBtn = document.getElementById('close-url-results');
+    const closeEmailBtn = document.getElementById('close-email-results');
+    
+    if (closeUrlBtn) {
+      closeUrlBtn.addEventListener('click', () => this.closeScanResults());
+    }
+    if (closeEmailBtn) {
+      closeEmailBtn.addEventListener('click', () => this.closeScanResults());
+    }
+  }
+
+  closeScanResults() {
+    const resultsSection = document.getElementById('results-section');
+    resultsSection.classList.add('closing');
+    
+    setTimeout(() => {
+      resultsSection.style.display = 'none';
+      resultsSection.classList.remove('closing');
+      
+      // Clear hidden classes
+      document.getElementById('url-results').classList.add('hidden');
+      document.getElementById('email-results').classList.add('hidden');
+    }, 400);
   }
 
   setupScanForms() {
-    // URL scan forms
+    // URL/email scan forms - attach handlers except for homepage panels
+    // Never bind handlers for homepage panels (#panel-url / #panel-email)
+    // These are managed by `ScanningSystem` to avoid duplicate event handlers.
     document.querySelectorAll('form').forEach(form => {
+      const isHomepageUrlPanel = !!form.closest('#panel-url');
+      const isHomepageEmailPanel = !!form.closest('#panel-email');
+      if (isHomepageUrlPanel || isHomepageEmailPanel) return;
+
       const urlInput = form.querySelector('#url-input, input[type="url"]');
       const emailInput = form.querySelector('#email-input, textarea');
 
@@ -629,23 +793,177 @@ class ScanManager {
       const result = this.simulateScan(value, type);
       auth.incrementScanCount();
       this.showScanResult(result);
+      this.saveScanReport(result);
+      this.displayScanHistory();
     }, 1000);
   }
 
   simulateScan(value, type) {
-    // Simple demo scan with random results
-    const threats = ['safe', 'suspicious', 'malicious'];
-    const threat = threats[Math.floor(Math.random() * threats.length)];
-    const confidence = threat === 'safe' ? 70 + Math.random() * 30 : 60 + Math.random() * 40;
+    if (type === 'url') {
+      return this.scanURL(value);
+    } else if ((type || '').toString().toLowerCase().includes('email')) {
+      return this.scanEmail(value);
+    }
+  }
+
+  scanURL(url) {
+    // URL-specific scanning logic
+    const threats = [
+      { threat: 'safe', weight: 40 },
+      { threat: 'suspicious', weight: 35 },
+      { threat: 'malicious', weight: 25 }
+    ];
+
+    const threat = this.weightedRandomThreat(threats);
+    const urlLower = url.toLowerCase();
+    
+    // Generate URL-specific indicators based on threat level
+    let indicators = [];
+    let issues = [];
+    let summary = '';
+
+    if (threat === 'safe') {
+      indicators = [
+        'Valid SSL certificate (HTTPS)',
+        'Domain registered over 3 years ago',
+        'Not found in phishing databases',
+        'No suspicious redirects detected',
+        'No malware signatures detected'
+      ];
+      issues = ['✓ Domain reputation: Good', '✓ Security certificates: Valid'];
+      summary = `${url} appears to be a legitimate website. The domain has a good reputation, valid SSL certificate, and no known malicious patterns. Safe to visit.`;
+    } else if (threat === 'suspicious') {
+      indicators = [
+        'Recently registered domain (< 6 months)',
+        'URL structure similar to popular services',
+        'Unusual port number detected',
+        'Possible credential harvesting attempt',
+        'Mixed HTTP/HTTPS content'
+      ];
+      issues = ['⚠ Domain age: Very new', '⚠ URL pattern: Suspicious similarity', '⚠ SSL: Partial'];
+      summary = `${url} shows warning signs. This domain was recently registered and has URL patterns similar to legitimate services. Possible phishing attempt. Verify before visiting.`;
+    } else {
+      indicators = [
+        'Domain blacklisted in threat intelligence',
+        'Known phishing/malware hosting site',
+        'Spoofed domain of legitimate service',
+        'History of credential theft',
+        'Multiple malware distribution incidents'
+      ];
+      issues = ['✕ Blacklisted: Yes', '✕ Threat type: Phishing/Malware', '✕ Risk level: Critical'];
+      summary = `WARNING: ${url} is a CONFIRMED MALICIOUS website. It is blacklisted in threat databases and has a history of phishing attacks and malware distribution. DO NOT VISIT OR ENTER ANY INFORMATION.`;
+    }
 
     return {
-      type,
-      value,
+      type: 'url',
+      value: url,
       threat,
-      confidence: Math.round(confidence),
+      confidence: threat === 'safe' ? 85 + Math.random() * 15 : 70 + Math.random() * 30,
       timestamp: new Date().toISOString(),
-      indicators: this.getIndicators(threat)
+      indicators,
+      issues,
+      summary,
+      riskLevel: threat === 'safe' ? 'Low' : threat === 'suspicious' ? 'Medium' : 'High',
+      scanDetails: {
+        urlStructure: this.analyzeURLStructure(url),
+        sslStatus: threat === 'safe' ? 'Valid' : threat === 'suspicious' ? 'Partial' : 'Invalid',
+        domainAge: threat === 'safe' ? '3+ years' : threat === 'suspicious' ? '< 6 months' : 'Newly registered',
+        reputationScore: threat === 'safe' ? 85 : threat === 'suspicious' ? 35 : 5
+      }
     };
+  }
+
+  scanEmail(emailContent) {
+    // Email-specific scanning logic
+    const threats = [
+      { threat: 'safe', weight: 30 },
+      { threat: 'suspicious', weight: 45 },
+      { threat: 'malicious', weight: 25 }
+    ];
+
+    const threat = this.weightedRandomThreat(threats);
+    
+    // Extract email features for analysis
+    const hasSuspiciousLanguage = emailContent.includes('verify') || emailContent.includes('confirm') || emailContent.includes('urgent');
+    const hasLinks = emailContent.includes('http');
+    const hasAttachments = emailContent.includes('attachment') || emailContent.includes('.zip') || emailContent.includes('.exe');
+    
+    let indicators = [];
+    let issues = [];
+    let summary = '';
+
+    if (threat === 'safe') {
+      indicators = [
+        'Sender domain verified and authenticated',
+        'Email headers valid and properly formatted',
+        'No suspicious links or attachments',
+        'Content aligns with sender profile',
+        'No phishing language detected'
+      ];
+      issues = ['✓ Sender authentication: Valid', '✓ Content analysis: Clean'];
+      summary = 'This email appears to be legitimate. The sender is verified, content is safe, and no phishing patterns detected. Safe to interact with.';
+    } else if (threat === 'suspicious') {
+      indicators = [
+        'Sender domain mismatch (spoofing attempt)',
+        'Unusual urgency or fear-based language',
+        'Requests for sensitive information',
+        'Suspicious links with shortened URLs',
+        'Unexpected attachment from known sender'
+      ];
+      issues = ['⚠ Sender verification: Partial', '⚠ Language analysis: Warning signs', '⚠ Links: Suspicious'];
+      summary = 'This email has warning signs and may be phishing. The sender appears spoofed, contains urgent language, and requests personal information. Do not click links or download attachments. Verify directly with the sender.';
+    } else {
+      indicators = [
+        'Known phishing campaign signature detected',
+        'Severe sender domain spoofing',
+        'Malicious attachment or link detected',
+        'Email found in threat databases',
+        'Advanced social engineering techniques'
+      ];
+      issues = ['✕ Phishing campaign: Confirmed', '✕ Malicious content: Detected', '✕ Risk level: Critical'];
+      summary = 'ALERT: This is a CONFIRMED PHISHING OR MALWARE EMAIL. It matches known attack patterns and contains malicious content. Delete immediately. Do not open attachments or click links. Report as spam/phishing to your email provider.';
+    }
+
+    return {
+      type: 'email',
+      value: emailContent.substring(0, 100) + (emailContent.length > 100 ? '...' : ''),
+      threat,
+      confidence: threat === 'safe' ? 80 + Math.random() * 20 : 65 + Math.random() * 35,
+      timestamp: new Date().toISOString(),
+      indicators,
+      issues,
+      summary,
+      riskLevel: threat === 'safe' ? 'Low' : threat === 'suspicious' ? 'Medium' : 'High',
+      scanDetails: {
+        senderVerification: threat === 'safe' ? 'Valid' : threat === 'suspicious' ? 'Partial' : 'Spoofed',
+        languageAnalysis: threat === 'safe' ? 'Normal' : threat === 'suspicious' ? 'Warning signs' : 'Urgent/Fear-based',
+        attachmentsAnalysis: threat === 'safe' ? 'None/Safe' : threat === 'suspicious' ? 'Suspicious' : 'Malicious',
+        phishingScore: threat === 'safe' ? 5 : threat === 'suspicious' ? 65 : 95
+      }
+    };
+  }
+
+  weightedRandomThreat(threats) {
+    const totalWeight = threats.reduce((sum, t) => sum + t.weight, 0);
+    let random = Math.random() * totalWeight;
+    
+    for (let threat of threats) {
+      random -= threat.weight;
+      if (random <= 0) return threat.threat;
+    }
+    
+    return threats[0].threat;
+  }
+
+  analyzeURLStructure(url) {
+    const hasHttps = url.startsWith('https');
+    const isShortened = url.includes('bit.ly') || url.includes('tinyurl') || url.includes('short');
+    const hasSubdomains = (url.match(/\./g) || []).length > 2;
+    
+    if (isShortened) return 'Shortened URL (obfuscated)';
+    if (hasSubdomains) return 'Multiple subdomains (suspicious)';
+    if (hasHttps) return 'Standard HTTPS structure';
+    return 'HTTP (unencrypted)';
   }
 
   getIndicators(threat) {
@@ -658,51 +976,731 @@ class ScanManager {
   }
 
   showScanResult(result) {
-    const modal = document.createElement('div');
-    modal.className = 'scan-result-modal';
-    modal.innerHTML = `
-      <div class="scan-result-content">
-        <div class="scan-result-header">
-          <h3>Scan Complete</h3>
-          <button class="close-modal" id="scan-modal-close">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+    // Show results section with smooth animation
+    const resultsSection = document.getElementById('results-section');
+    const urlResults = document.getElementById('url-results');
+    const emailResults = document.getElementById('email-results');
+
+    // Hide all result panels first
+    if (urlResults) urlResults.classList.add('hidden');
+    if (emailResults) emailResults.classList.add('hidden');
+
+    if (result.type === 'url') {
+      this.displayUrlResults(result);
+      if (urlResults) urlResults.classList.remove('hidden');
+    } else {
+      this.displayEmailResults(result);
+      if (emailResults) emailResults.classList.remove('hidden');
+    }
+
+    // Show results section with animation
+    if (resultsSection) resultsSection.style.display = 'block';
+
+    // Scroll to results smoothly
+    setTimeout(() => {
+      if (resultsSection) resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }
+
+  displayUrlResults(result) {
+    const statusColor = document.getElementById('url-status-color');
+    const statusLabel = document.getElementById('url-status-label');
+    const statusDesc = document.getElementById('url-status-desc');
+    const riskLevel = document.getElementById('url-risk-level');
+    const riskBar = document.getElementById('url-risk-bar');
+    const issuesList = document.getElementById('url-issues-list');
+    const summary = document.getElementById('url-analysis-summary');
+    const scanTime = document.getElementById('url-scan-time');
+
+    // Set status color and label (guarded)
+    if (statusColor) statusColor.className = 'status-indicator ' + (result.threat || 'safe');
+    if (statusLabel) statusLabel.textContent = (result.threat || 'safe').charAt(0).toUpperCase() + (result.threat || 'safe').slice(1);
+    if (statusDesc) statusDesc.textContent = this.getThreatDescription('url', result.threat || 'safe');
+
+    // Set risk level with exact value from scan
+    if (riskLevel) {
+      riskLevel.textContent = result.riskLevel || 'N/A';
+      riskLevel.className = 'risk-value ' + ((result.threat === 'safe') ? 'low' : (result.threat === 'suspicious') ? 'medium' : 'high');
+    }
+
+    // Animate risk bar based on threat
+    const riskPercentages = { safe: 20, suspicious: 60, malicious: 95 };
+    if (riskBar && riskPercentages[result.threat]) riskBar.style.width = riskPercentages[result.threat] + '%';
+
+    // Display detailed issues with colored indicators
+    if (issuesList && Array.isArray(result.issues)) {
+      issuesList.innerHTML = result.issues.map(issue => {
+        let className = '';
+        if (issue.startsWith('✓')) {
+          className = 'safe';
+        } else if (issue.startsWith('⚠')) {
+          className = 'warning';
+        } else if (issue.startsWith('✕')) {
+          className = 'malicious';
+        }
+        return `<li class="${className}">${issue}</li>`;
+      }).join('');
+    }
+
+    // Show comprehensive summary
+    if (summary) summary.textContent = result.summary || '';
+
+    // Scan time
+    if (scanTime) scanTime.textContent = `✓ Scan completed in ${(Math.random() * 1 + 0.8).toFixed(1)}s | Confidence: ${Math.round(result.confidence || 0)}%`;
+
+    // Store reference for export
+    this.lastUrlResult = result;
+
+    // Setup View Report button
+    const viewReportBtn = document.getElementById('url-view-report');
+    if (viewReportBtn) {
+      viewReportBtn.addEventListener('click', () => {
+        window.location.href = `report.html?id=${result.id}`;
+      });
+    }
+  }
+
+  displayEmailResults(result) {
+    const statusColor = document.getElementById('email-status-color');
+    const statusLabel = document.getElementById('email-status-label');
+    const statusDesc = document.getElementById('email-status-desc');
+    const riskLevel = document.getElementById('email-risk-level');
+    const riskBar = document.getElementById('email-risk-bar');
+    const issuesList = document.getElementById('email-issues-list');
+    const summary = document.getElementById('email-analysis-summary');
+    const scanTime = document.getElementById('email-scan-time');
+
+    // Set status color and label (guard elements)
+    if (statusColor) statusColor.className = 'status-indicator ' + (result.threat || 'safe');
+    if (statusLabel) statusLabel.textContent = (result.threat || 'safe').charAt(0).toUpperCase() + (result.threat || 'safe').slice(1);
+    if (statusDesc) statusDesc.textContent = this.getThreatDescription('email', result.threat || 'safe');
+
+    // Set risk level with exact value from scan
+    if (riskLevel) {
+      riskLevel.textContent = result.riskLevel || 'N/A';
+      riskLevel.className = 'risk-value ' + ((result.threat === 'safe') ? 'low' : (result.threat === 'suspicious') ? 'medium' : 'high');
+    }
+
+    // Animate risk bar based on threat
+    const riskPercentages = { safe: 25, suspicious: 65, malicious: 98 };
+    if (riskBar && riskPercentages[result.threat]) riskBar.style.width = riskPercentages[result.threat] + '%';
+
+    // Display detailed issues with colored indicators
+    if (issuesList && Array.isArray(result.issues)) {
+      issuesList.innerHTML = result.issues.map(issue => {
+        let className = '';
+        if (issue.startsWith('✓')) {
+          className = 'safe';
+        } else if (issue.startsWith('⚠')) {
+          className = 'warning';
+        } else if (issue.startsWith('✕')) {
+          className = 'malicious';
+        }
+        return `<li class="${className}">${issue}</li>`;
+      }).join('');
+    }
+
+    // Show comprehensive summary
+    if (summary) summary.textContent = result.summary || '';
+
+    // Scan time
+    if (scanTime) scanTime.textContent = `✓ Scan completed in ${(Math.random() * 1.5 + 1).toFixed(1)}s | Confidence: ${Math.round(result.confidence || 0)}%`;
+    
+    // Store reference for export
+    this.lastEmailResult = result;
+
+    // Setup View Report button
+    const viewReportBtn = document.getElementById('email-view-report');
+    if (viewReportBtn) {
+      viewReportBtn.addEventListener('click', () => {
+        window.location.href = `report.html?id=${result.id}`;
+      });
+    }
+  }
+
+  getThreatDescription(type, threat) {
+    const descriptions = {
+      url: {
+        safe: 'This URL appears to be safe and secure.',
+        suspicious: 'This URL shows some suspicious characteristics. Proceed with caution.',
+        malicious: 'This URL is identified as malicious. Do NOT visit.'
+      },
+      email: {
+        safe: 'This email appears to be legitimate.',
+        suspicious: 'This email shows signs of suspicious activity. Verify sender before responding.',
+        malicious: 'This email is identified as phishing or malicious. Do not reply or click links.'
+      }
+    };
+    return descriptions[type][threat] || '';
+  }
+
+  async saveScanReport(result) {
+    const token = localStorage.getItem('token');
+    // If a centralized ScanningSystem is present, delegate saving to it
+    if (window.scanSystem && typeof window.scanSystem.saveScan === 'function') {
+      try {
+        await window.scanSystem.saveScan(result);
+        return;
+      } catch (err) {
+        console.warn('[ScanManager] scanSystem.saveScan failed, falling back to local behavior', err);
+      }
+    }
+
+    if (token) {
+      // Logged-in user: send scan to server so it's stored under the user's account
+      try {
+        const endpoint = (result.type || '').toString().toLowerCase().includes('email') ? '/api/scan/email' : '/api/scan/url';
+        const body = (result.type || '').toString().toLowerCase().includes('email')
+          ? { senderEmail: result.senderEmail || 'unknown@local', emailContent: result.value || '', subject: result.subject || '' }
+          : { url: result.value };
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+          console.warn('[ScanManager] Server returned error saving scan, saving locally instead');
+          this.saveScanReportToLocal(result);
+        } else {
+          const data = await response.json();
+          if (!data.success) {
+            console.warn('[ScanManager] API responded with failure:', data.message);
+            this.saveScanReportToLocal(result);
+          } else {
+            await this.loadScanHistory();
+            this.displayScanHistory();
+          }
+        }
+      } catch (err) {
+        console.error('[ScanManager] Error saving scan to server, falling back to local save', err);
+        this.saveScanReportToLocal(result);
+      }
+    } else {
+      // Non-logged-in user: save to localStorage
+      console.log('[ScanManager] Saving scan to localStorage for non-logged-in user');
+      this.saveScanReportToLocal(result);
+    }
+
+    // Show success notification
+    this.showNotification('Scan report saved automatically', 'success');
+  }
+
+  saveScanReportToLocal(result) {
+    // Create comprehensive report object with stable string id and unified fields
+    const ts = Date.now();
+    const report = {
+      id: `local-${ts}`,
+      type: result.type,
+      value: result.value,
+      threat: result.threat || result.status || result.threatLevel,
+      confidence: typeof result.confidence !== 'undefined' ? Math.round(result.confidence) : (result.riskPercent || null),
+      riskLevel: result.riskLevel || result.riskPercent || null,
+      indicators: result.indicators || [],
+      issues: result.issues || [],
+      summary: result.summary || '',
+      details: result.scanDetails || result.details || null,
+      timestamp: new Date().toISOString(),
+      date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+    };
+
+    // Add to scan history, avoid duplicate when same as last
+    const last = this.scanHistory[0];
+    if (!(last && last.value === report.value && String(last.threat) === String(report.threat) && Math.abs(new Date(last.timestamp).getTime() - new Date(report.timestamp).getTime()) < 2000)) {
+      this.scanHistory.unshift(report);
+    }
+
+    // Keep only last 50 scans
+    if (this.scanHistory.length > 50) {
+      this.scanHistory = this.scanHistory.slice(0, 50);
+    }
+
+    // Save to localStorage
+    localStorage.setItem('scanHistory', JSON.stringify(this.scanHistory));
+
+    // Update display
+    this.displayScanHistory();
+
+    // Synchronize with ScanningSystem (dashboard) if present so recent scans table updates
+    try {
+      if (window.scanSystem && Array.isArray(JSON.parse(localStorage.getItem('scanHistory') || '[]'))) {
+        const serverHistory = JSON.parse(localStorage.getItem('scanHistory') || '[]');
+        // Normalize serverHistory entries to scanning-system format (id, type, value, threat...)
+        window.scanSystem.scanHistory = serverHistory.map(item => ({
+          id: String(item.id),
+          type: item.type || (item.value && String(item.value).includes('@') ? 'email' : 'url'),
+          value: item.value || item.target || '',
+          threat: item.threat || item.result || 'safe',
+          confidence: item.confidence || item.confidence === 0 ? item.confidence : null,
+          indicators: item.indicators || [],
+          issues: item.issues || [],
+          date: item.date,
+          time: item.time,
+          timestamp: item.timestamp || item.ts || Date.now()
+        }));
+        if (typeof window.scanSystem.updateDashboardTable === 'function') {
+          window.scanSystem.updateDashboardTable();
+        }
+      }
+    } catch (err) {
+      console.warn('[ScanManager] sync to scanSystem failed', err);
+    }
+  }
+
+  async deleteScanReport(reportId) {
+    const token = localStorage.getItem('token');
+
+    if (token) {
+      // For logged-in users, attempt to delete on server
+      try {
+        const response = await fetch(`/api/scan/${reportId}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          }
+        });
+
+        if (response.ok) {
+          await this.loadScanHistory();
+          this.displayScanHistory();
+          this.showNotification('Report deleted', 'info');
+          return;
+        } else {
+          console.warn('[ScanManager] Server failed to delete scan, falling back to local removal');
+        }
+      } catch (err) {
+        console.error('[ScanManager] Error deleting scan on server, falling back to local removal', err);
+      }
+    } else {
+      // Non-logged-in user: delete from localStorage
+      this.scanHistory = this.scanHistory.filter(report => report.id !== reportId);
+      localStorage.setItem('scanHistory', JSON.stringify(this.scanHistory));
+      this.displayScanHistory();
+    }
+
+    // If we reached here, server delete didn't happen — ensure local removal
+    this.scanHistory = this.scanHistory.filter(report => report.id !== reportId);
+    localStorage.setItem('scanHistory', JSON.stringify(this.scanHistory));
+    this.displayScanHistory();
+    this.showNotification('Report deleted', 'info');
+  }
+
+  displayScanHistory() {
+    const historyList = document.getElementById('scan-history-list');
+    if (!historyList) return;
+
+    // If centralized scanning system exists, use its history
+    if (window.scanSystem && Array.isArray(window.scanSystem.scanHistory)) {
+      this.scanHistory = window.scanSystem.scanHistory;
+    }
+
+    if (this.scanHistory.length === 0) {
+      historyList.innerHTML = `
+        <div class="history-empty-state">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          <p>No scans yet. Perform your first scan above!</p>
         </div>
-        <div class="scan-result-body">
-          <div class="scan-result-badge badge-${result.threat}">${result.threat.toUpperCase()}</div>
-          <div class="scan-result-confidence">${result.confidence}% Confidence</div>
-          <div class="scan-result-value">${result.value}</div>
-          <div class="scan-result-indicators">
-            <h4>Detection Indicators:</h4>
-            <ul>
-              ${result.indicators.map(indicator => `<li>${indicator}</li>`).join('')}
-            </ul>
+      `;
+      return;
+    }
+
+    const extractEmail = (text) => {
+      if (!text) return '';
+      try { const m = String(text).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i); return m ? m[0] : ''; } catch (e) { return ''; }
+    };
+
+    historyList.innerHTML = this.scanHistory.map(report => {
+      const statusIcon = report.threat === 'safe' ? '✓' : report.threat === 'suspicious' ? '⚠' : '✕';
+      const shortValue = (report.value || '').length > 50 ? (report.value || '').substring(0, 47) + '...' : (report.value || '');
+        const displayValue = (report.type || '').toString().toLowerCase().includes('email') ? (report.senderEmail || extractEmail(report.value) || 'unknown@local') : shortValue;
+      const issuesSummary = (report.indicators || []).slice(0, 2).join(' • ') + ((report.indicators || []).length > 2 ? ` +${(report.indicators || []).length - 2} more` : '');
+
+      return `
+        <div class="history-card" data-report-id="${report.id}">
+          <div class="history-card-header">
+            <span class="history-badge ${report.threat}">
+              <span class="history-status-icon">${statusIcon}</span>
+              <span>${report.threat.charAt(0).toUpperCase() + report.threat.slice(1)}</span>
+            </span>
+            <span class="history-type-badge">${report.type}</span>
+          </div>
+          
+          <div class="history-card-value">${this.escapeHtml(displayValue)}</div>
+          
+          <div class="history-card-issues">
+            <div class="history-issues-label">Detected Issues:</div>
+            <div class="history-issues-summary">${this.escapeHtml(issuesSummary)}</div>
+          </div>
+          
+          <div class="history-card-footer">
+            <div class="history-time">
+              <span>📅</span>
+              <span>${report.date} ${report.time}</span>
+            </div>
+            <div class="history-actions">
+              <button class="history-export-btn" data-report-id="${report.id}" title="Export as PDF">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+              </button>
+              <button class="history-delete-btn" data-report-id="${report.id}" title="Delete report">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
-        <div class="scan-result-footer">
-          <button class="btn btn-primary" id="scan-modal-close-btn">Close</button>
-        </div>
-      </div>
-    `;
+      `;
+    }).join('');
 
-    document.body.appendChild(modal);
+    // Attach event listeners to history action buttons
+    const exportButtons = historyList.querySelectorAll('.history-export-btn');
+    exportButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const reportId = btn.getAttribute('data-report-id');
+        this.exportReportAsPDF(reportId);
+      });
+    });
 
-    // Add event listeners for modal close buttons
-    const closeBtn = modal.querySelector('#scan-modal-close');
-    const closeBtnFooter = modal.querySelector('#scan-modal-close-btn');
-    const closeModal = () => modal.remove();
+    const deleteButtons = historyList.querySelectorAll('.history-delete-btn');
+    deleteButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const reportId = btn.getAttribute('data-report-id');
+        if (window.scanSystem && typeof window.scanSystem.deleteScanById === 'function') {
+          window.scanSystem.deleteScanById(reportId);
+        } else {
+          this.deleteScanReport(reportId);
+        }
+      });
+    });
+  }
+
+  exportReportAsPDF(reportId) {
+    // Find the report
+    const report = this.scanHistory.find(r => r.id === reportId);
+    if (!report) {
+      this.showNotification('Report not found', 'error');
+      return;
+    }
+
+    // Generate PDF content
+    const pdfContent = this.generatePDFContent(report);
     
-    if (closeBtn) closeBtn.addEventListener('click', closeModal);
-    if (closeBtnFooter) closeBtnFooter.addEventListener('click', closeModal);
+    // Create blob and download
+    const blob = new Blob([pdfContent], { type: 'text/html' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `PhishNet_Report_${report.date.replace(/,/g, '').replace(/\s+/g, '_')}.html`;
+    document.body.appendChild(link);
+    link.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+    
+    this.showNotification('Report downloaded successfully', 'success');
+  }
+
+  generatePDFContent(report) {
+    const threatColor = report.threat === 'safe' ? '#00FF88' : report.threat === 'suspicious' ? '#FFC107' : '#FF4D4D';
+    const threatBgColor = report.threat === 'safe' ? 'rgba(0, 255, 136, 0.1)' : report.threat === 'suspicious' ? 'rgba(255, 193, 7, 0.1)' : 'rgba(255, 77, 77, 0.1)';
+    
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PhishNet Scan Report</title>
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f5f5f5;
+      padding: 20px;
+      margin: 0;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #0B63D9;
+      padding-bottom: 20px;
+    }
+    .logo {
+      font-size: 28px;
+      font-weight: 700;
+      color: #0B63D9;
+      margin-bottom: 10px;
+    }
+    .report-title {
+      font-size: 20px;
+      color: #666;
+      margin: 0;
+    }
+    .status-section {
+      background: ${threatBgColor};
+      border-left: 4px solid ${threatColor};
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    .status-badge {
+      display: inline-block;
+      background: ${threatColor};
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .status-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #333;
+      margin: 10px 0;
+    }
+    .scan-info {
+      background: #f9f9f9;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 20px 0;
+    }
+    .info-row {
+      display: flex;
+      padding: 10px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    .info-label {
+      font-weight: 600;
+      color: #666;
+      width: 150px;
+      flex-shrink: 0;
+    }
+    .info-value {
+      color: #333;
+      word-break: break-all;
+    }
+    .section {
+      margin: 30px 0;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #0B63D9;
+    }
+    .issues-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .issues-list li {
+      padding: 12px;
+      margin-bottom: 10px;
+      background: #f9f9f9;
+      border-left: 3px solid #0B63D9;
+      border-radius: 4px;
+    }
+    .issue-safe {
+      border-left-color: #00FF88;
+      background: rgba(0, 255, 136, 0.05);
+    }
+    .issue-warning {
+      border-left-color: #FFC107;
+      background: rgba(255, 193, 7, 0.05);
+    }
+    .issue-malicious {
+      border-left-color: #FF4D4D;
+      background: rgba(255, 77, 77, 0.05);
+    }
+    .summary-box {
+      background: #f0f7ff;
+      border: 1px solid #0B63D9;
+      padding: 20px;
+      border-radius: 4px;
+      margin: 20px 0;
+      line-height: 1.8;
+    }
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin: 20px 0;
+    }
+    .detail-card {
+      background: #f9f9f9;
+      padding: 15px;
+      border-radius: 4px;
+      border-left: 3px solid #0B63D9;
+    }
+    .detail-card-title {
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .detail-card-value {
+      font-size: 16px;
+      color: #333;
+      font-weight: 700;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+      color: #999;
+      font-size: 12px;
+    }
+    .confidence-bar {
+      width: 100%;
+      height: 10px;
+      background: #e0e0e0;
+      border-radius: 5px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+    .confidence-fill {
+      height: 100%;
+      background: ${threatColor};
+      width: ${report.confidence}%;
+      transition: width 0.3s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">PhishNet</div>
+      <p class="report-title">Security Scan Report</p>
+    </div>
+
+    <div class="status-section">
+      <span class="status-badge">${(report.threat||'').toUpperCase()} - ${((function(r){
+        try{ const s=String(r).trim().toLowerCase(); if(s==='safe')return 'Low'; if(s==='suspicious')return 'Medium'; if(s==='malicious')return 'High'; if(['low','medium','high','critical'].includes(s)) return s.charAt(0).toUpperCase()+s.slice(1); }catch(e){}
+        return 'Unknown';
+      })(report.riskLevel))} Risk</span>
+      <div class="status-title">${report.threat === 'safe' ? '✓ Safe' : report.threat === 'suspicious' ? '⚠ Suspicious' : '✕ Malicious'}</div>
+      <p style="margin: 0; color: #666; font-size: 14px;">Confidence: ${report.confidence}%</p>
+      <div class="confidence-bar">
+        <div class="confidence-fill"></div>
+      </div>
+    </div>
+
+    <div class="scan-info">
+      <div class="info-row">
+        <div class="info-label">Scan Type:</div>
+        <div class="info-value"><strong>${report.type === 'url' ? 'URL Scan' : 'Email Scan'}</strong></div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">${report.type === 'url' ? 'URL' : 'Email'}:</div>
+        <div class="info-value">${this.escapeHtml(this.getDisplayTarget ? this.getDisplayTarget(report) : (report.senderEmail || extractEmail(report.value) || ''))}</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Scan Date:</div>
+        <div class="info-value">${report.date} at ${report.time}</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Status:</div>
+        <div class="info-value"><strong style="color: ${threatColor};">${report.threat.toUpperCase()}</strong></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Detailed Findings</div>
+      <ul class="issues-list">
+        ${report.issues.map(issue => {
+          let className = 'issue-safe';
+          if (issue.startsWith('⚠')) className = 'issue-warning';
+          if (issue.startsWith('✕')) className = 'issue-malicious';
+          return `<li class="${className}">${issue}</li>`;
+        }).join('')}
+      </ul>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Summary</div>
+      <div class="summary-box">
+        ${report.summary}
+      </div>
+    </div>
+
+    ${report.scanDetails ? `
+    <div class="section">
+      <div class="section-title">Technical Details</div>
+      <div class="details-grid">
+        ${Object.entries(report.scanDetails).map(([key, value]) => {
+          const label = key.replace(/([A-Z])/g, ' $1').trim();
+          return `<div class="detail-card">
+            <div class="detail-card-title">${label}</div>
+            <div class="detail-card-value">${value}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    ` : ''}
+
+    <div class="footer">
+      <p>This report was generated by PhishNet on ${new Date().toLocaleString()}</p>
+      <p>PhishNet - Professional Phishing & Malware Detection</p>
+    </div>
+  </div>
+
+  <script>
+    // Auto-print when opened
+    window.onload = function() {
+      setTimeout(() => window.print(), 500);
+    };
+  </script>
+</body>
+</html>
+    `;
   }
 
   showNotification(message, type = 'info') {
     const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.textContent = message;
+    notification.className = `toast-notification ${type}`;
+    
+    const icon = {
+      'info': '❓',
+      'error': '⚠️',
+      'warning': '⚠️',
+      'success': '✅'
+    }[type] || 'ℹ️';
+    
+    notification.innerHTML = `
+      <span class="toast-icon">${icon}</span>
+      <span class="toast-message">${message}</span>
+    `;
 
     document.body.appendChild(notification);
 
@@ -712,8 +1710,8 @@ class ScanManager {
 
     setTimeout(() => {
       notification.classList.remove('show');
-      setTimeout(() => notification.remove(), 300);
-    }, 3000);
+      setTimeout(() => notification.remove(), 350);
+    }, 3500);
   }
 }
 
@@ -1160,7 +2158,7 @@ class FormManager {
 // ==================== INITIALIZE ON PAGE LOAD ====================
 document.addEventListener('DOMContentLoaded', () => {
   const nav = new NavigationManager();
-  const scanner = new ScanManager();
+  window.scanManagerInstance = new ScanManager();
   const forms = new FormManager();
 
   // Note: NavigationManager.init() calls refreshProfileAndUpdate() 

@@ -30,22 +30,38 @@ router.post('/url', optionalAuthMiddleware, async (req, res, next) => {
 
     const domain = extractDomain(sanitizedURL);
 
-    // Check URL safety
+    // Check URL safety (server-side) but allow client-provided analysis to override when present
     const safetyCheck = checkURLSafety(sanitizedURL);
 
-    // Prepare threat data
+    // Accept optional analysis overrides from client
+    const {
+      isSafe: clientIsSafe,
+      threatLevel: clientThreatLevel,
+      threatType: clientThreatType,
+      confidence: clientConfidence,
+      indicators: clientIndicators,
+      issues: clientIssues,
+      summary: clientSummary,
+      scanType: clientScanType
+    } = req.body || {};
+
+    // Prepare threat data - prefer client-supplied analysis when provided
     const threatData = {
       userId: req.user ? req.user._id : null,
       url: sanitizedURL,
       domain: domain,
-      isSafe: safetyCheck.isSafe,
-      threatType: safetyCheck.threatType,
-      threatLevel: safetyCheck.threatLevel,
+      isSafe: typeof clientIsSafe !== 'undefined' ? clientIsSafe : safetyCheck.isSafe,
+      threatType: clientThreatType || safetyCheck.threatType,
+      threatLevel: clientThreatLevel || safetyCheck.threatLevel,
       detectionSource: 'database',
-      confidence: safetyCheck.isSafe ? 100 : Math.max(50, 100 - safetyCheck.suspicionScore),
-      userWarned: !safetyCheck.isSafe,
-      warningType: safetyCheck.isSafe ? 'none' : 'banner',
+      confidence: typeof clientConfidence !== 'undefined' ? clientConfidence : (safetyCheck.isSafe ? 100 : Math.max(50, 100 - (safetyCheck.suspicionScore || 50))),
+      userWarned: typeof clientIsSafe !== 'undefined' ? !clientIsSafe : !safetyCheck.isSafe,
+      warningType: (typeof clientIsSafe !== 'undefined' ? (!clientIsSafe ? 'banner' : 'none') : (safetyCheck.isSafe ? 'none' : 'banner')),
       userAction: 'pending',
+      indicators: clientIndicators || [],
+      issues: clientIssues || [],
+      summary: clientSummary || null,
+      scanType: clientScanType || 'url'
     };
 
     // Save to history if user is logged in
@@ -83,18 +99,19 @@ router.post('/url', optionalAuthMiddleware, async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: safetyCheck.isSafe ? 'URL is safe' : 'URL appears to be unsafe or phishing',
+      message: threatData.isSafe ? 'URL is safe' : 'URL appears to be unsafe or phishing',
       data: {
         url: sanitizedURL,
         domain: domain,
-        isSafe: safetyCheck.isSafe,
-        threatType: safetyCheck.threatType,
-        threatLevel: safetyCheck.threatLevel,
-        confidence: safetyCheck.confidence,
-        recommendation: safetyCheck.isSafe
+        isSafe: threatData.isSafe,
+        threatType: threatData.threatType,
+        threatLevel: threatData.threatLevel,
+        confidence: threatData.confidence,
+        recommendation: threatData.isSafe
           ? 'This URL appears to be safe. However, always exercise caution online.'
           : 'We recommend not visiting this URL. It may be a phishing or malicious site.',
         checkId: checkRecord ? checkRecord._id : null,
+        record: checkRecord || null,
       },
     });
   } catch (error) {
@@ -142,45 +159,77 @@ router.post('/email', optionalAuthMiddleware, async (req, res, next) => {
       }
     }
 
-    // Check sender email for phishing indicators
-    const senderDomain = senderEmail.split('@')[1];
+    // Check sender email for phishing indicators (defensive: handle malformed senderEmail)
+    const senderDomain = (typeof senderEmail === 'string' && senderEmail.includes('@')) ? senderEmail.split('@')[1].toLowerCase() : null;
     const suspiciousSenderIndicators = [
       'noreply', 'alert', 'urgent', 'confirm', 'verify',
       'update', 'security', 'action', 'required', 'support'
     ];
-    const isSuspiciousSender = suspiciousSenderIndicators.some(
-      (indicator) => senderDomain.toLowerCase().includes(indicator)
+    const isSuspiciousSender = !!senderDomain && suspiciousSenderIndicators.some(
+      (indicator) => senderDomain.includes(indicator)
     );
 
     const isSafeEmail = !hasThreats && !isSuspiciousSender;
 
-    // Save to history if user is logged in
+    // Save to history if user is logged in; avoid duplicates within short window
     let emailRecord = null;
-    if (req.user && !isSafeEmail) {
-      emailRecord = await URLCheckHistory.create({
+    if (req.user) {
+      const { isSafe: clientIsSafe, threatLevel: clientThreatLevel, threatType: clientThreatType, confidence: clientConfidence, indicators: clientIndicators, issues: clientIssues, summary: clientSummary } = req.body || {};
+
+      const recordData = {
         userId: req.user._id,
         url: senderEmail,
-        domain: senderDomain,
-        isSafe: isSafeEmail,
-        threatType: 'phishing',
-        threatLevel: isSuspiciousSender ? 'high' : 'medium',
+        senderEmail: senderEmail,
+        domain: senderDomain || 'unknown.local',
+        isSafe: typeof clientIsSafe !== 'undefined' ? clientIsSafe : isSafeEmail,
+        threatType: clientThreatType || (isSuspiciousSender ? 'phishing' : 'unknown'),
+        threatLevel: clientThreatLevel || (isSuspiciousSender ? 'high' : (hasThreats ? 'medium' : 'low')),
         detectionSource: 'machine_learning',
-        confidence: 70,
-        userWarned: true,
-        warningType: 'banner',
+        confidence: typeof clientConfidence !== 'undefined' ? clientConfidence : (isSafeEmail ? 100 : 70),
+        userWarned: !isSafeEmail,
+        warningType: !isSafeEmail ? 'banner' : 'none',
         userAction: 'pending',
-      });
+        indicators: clientIndicators || urlChecks.map(u=>u.threatType),
+        issues: clientIssues || urlChecks.map(u=>u.url),
+        summary: clientSummary || null,
+        scanType: 'email'
+      };
+
+      // Deduplicate recent identical email records
+      const recent = await URLCheckHistory.findOne({ userId: req.user._id, url: senderEmail }).sort({ checkedAt: -1 }).exec();
+      if (recent && (Date.now() - new Date(recent.checkedAt).getTime()) < 5000) {
+        emailRecord = recent;
+        console.log('[scan] Reusing recent email record for user', req.user._id.toString());
+      } else {
+        // Log recordData to help debugging validation errors (full object)
+        try {
+          console.log('[scan] Creating email record for user:', req.user._id.toString());
+          console.log('[scan] recordData:', JSON.stringify(recordData));
+          emailRecord = await URLCheckHistory.create(recordData);
+          console.log('[scan] Created EmailCheckHistory record', emailRecord._id);
+        } catch (createErr) {
+          console.error('[scan] Failed to create EmailCheckHistory record:', createErr && createErr.stack ? createErr.stack : createErr);
+          // If validation error, provide details to client to avoid opaque 500
+          if (createErr && createErr.name === 'ValidationError') {
+            return res.status(400).json({ success: false, message: 'Invalid email record data', errors: Object.values(createErr.errors).map(e => e.message) });
+          }
+          // For other errors, log and return 500 with message
+          return res.status(500).json({ success: false, message: 'Failed saving email scan', error: createErr && createErr.message ? createErr.message : String(createErr) });
+        }
+      }
 
       // Update user metrics
       await req.user.updateMetrics({
-        phishingUrls: 1,
-        protectionWarnings: 1,
+        phishingUrls: isSafeEmail ? 0 : 1,
+        protectionWarnings: isSafeEmail ? 0 : 1,
       });
     }
 
     // Update analytics
-    if (!isSafeEmail) {
-      const analytics = await Analytics.getAnalytics();
+    const analytics = await Analytics.getAnalytics();
+    if (isSafeEmail) {
+      await analytics.updatePlatformMetrics({ safeWebsites: 1 });
+    } else {
       await analytics.updatePlatformMetrics({
         phishingUrls: 1,
         protectionWarnings: 1,
@@ -191,7 +240,7 @@ router.post('/email', optionalAuthMiddleware, async (req, res, next) => {
       success: true,
       message: isSafeEmail ? 'Email appears to be safe' : 'Email contains suspicious elements',
       data: {
-        isSafe: isSafeEmail,
+        isSafe: typeof (req.body && req.body.isSafe) !== 'undefined' ? req.body.isSafe : isSafeEmail,
         senderEmail: senderEmail,
         senderDomain: senderDomain,
         isSuspiciousSender: isSuspiciousSender,
@@ -201,6 +250,7 @@ router.post('/email', optionalAuthMiddleware, async (req, res, next) => {
           ? 'This email appears to be legitimate.'
           : 'This email shows signs of being a phishing attempt. Do not click links or provide personal information.',
         recordId: emailRecord ? emailRecord._id : null,
+        record: emailRecord || null,
       },
     });
   } catch (error) {
@@ -311,6 +361,106 @@ router.post('/batch', authMiddleware, async (req, res, next) => {
         results: results,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ======================== GET FILTERED REPORTS ========================
+// Get scan reports within a specified time range
+router.get('/reports/filtered', authMiddleware, async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { timeRange } = req.query;
+
+    // Validate time range
+    const validTimeRanges = ['7days', '1month', '2months', '3months', '4months', '5months', '6months'];
+    if (!timeRange || !validTimeRanges.includes(timeRange)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid time range. Valid options: 7days, 1month, 2months, 3months, 4months, 5months, 6months',
+      });
+    }
+
+    // Calculate date range
+    const now = new Date();
+    let startDate = new Date();
+
+    const timeRangeMap = {
+      '7days': 7,
+      '1month': 30,
+      '2months': 60,
+      '3months': 90,
+      '4months': 120,
+      '5months': 150,
+      '6months': 180,
+    };
+
+    const days = timeRangeMap[timeRange];
+    startDate.setDate(now.getDate() - days);
+
+    // Query reports within time range
+    const reports = await URLCheckHistory.find({
+      userId: userId,
+      checkedAt: {
+        $gte: startDate,
+        $lte: now,
+      },
+    })
+      .sort({ checkedAt: -1 })
+      .limit(1000);
+
+    // Calculate statistics
+    const stats = {
+      total: reports.length,
+      safe: reports.filter((r) => r.isSafe).length,
+      phishing: reports.filter((r) => r.threatType === 'phishing').length,
+      malware: reports.filter((r) => r.threatType === 'malware').length,
+      unsafe: reports.filter((r) => r.threatType === 'unsafe').length,
+      suspicious: reports.filter((r) => r.threatType === 'suspicious').length,
+    };
+
+    res.status(200).json({
+      success: true,
+      message: `Found ${reports.length} reports for ${timeRange}`,
+      data: {
+        timeRange,
+        dateRange: {
+          start: startDate,
+          end: now,
+        },
+        stats,
+        reports: reports.map((r) => ({
+          _id: r._id,
+          url: r.url,
+          domain: r.domain,
+          isSafe: r.isSafe,
+          threatType: r.threatType,
+          threatLevel: r.threatLevel,
+          confidence: r.confidence,
+          checkedAt: r.checkedAt,
+          detectionSource: r.detectionSource,
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ======================== DELETE SINGLE SCAN ENTRY ========================
+// Allows a user to delete a single scan history entry that belongs to them
+router.delete('/:id', authMiddleware, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const userId = req.user._id;
+
+    const deleted = await URLCheckHistory.findOneAndDelete({ _id: id, userId: userId });
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Scan entry not found' });
+    }
+
+    return res.status(200).json({ success: true, message: 'Scan entry deleted' });
   } catch (error) {
     next(error);
   }

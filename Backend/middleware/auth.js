@@ -83,7 +83,27 @@ const optionalAuthMiddleware = async (req, res, next) => {
   next();
 };
 
+// Admin-only middleware
+const adminMiddleware = async (req, res, next) => {
+  try {
+    // Ensure user is authenticated first
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    // Check admin flag on user model
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: 'Admin privileges required' });
+    }
+
+    next();
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Authorization error' });
+  }
+};
+
 module.exports = {
   authMiddleware,
   optionalAuthMiddleware,
+  adminMiddleware,
 };

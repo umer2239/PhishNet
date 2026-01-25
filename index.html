@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net;">
   <title>Home - PhishNet</title>
   <meta name="description" content="Protect yourself from phishing attacks with PhishNet's AI-powered email and URL detection system. Real-time threat analysis with confidence scoring.">
   
@@ -126,6 +127,51 @@
       </div>
     </section>
 
+    <!-- Scan Results Section (Hidden by default) -->
+    <section id="results-section" class="results-section" style="display: none;">
+      <div class="container">
+        <!-- Results will be dynamically inserted here -->
+        <div id="scan-result-container">
+          <!-- URL Result Panel -->
+          <div id="url-results" class="result-panel hidden">
+            <div class="card">
+              <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+                <h3 style="margin:0;">URL Scan Result</h3>
+                <div>
+                  <button id="url-view-report" class="btn btn-outline btn-sm">View Full Report</button>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="status-row" style="display:flex; gap:1rem; align-items:flex-start;">
+                  <div id="url-status-color" class="status-indicator"></div>
+                  <div style="flex:1;">
+                    <div id="url-status-label" style="font-weight:700; font-size:1.1rem;"></div>
+                    <div id="url-status-desc" style="color:var(--text-muted);"></div>
+                    <div style="margin-top:0.5rem;">
+                      <span id="url-risk-level" class="risk-value"></span>
+                      <div class="risk-bar-bg" style="background:rgba(255,255,255,0.03); height:8px; border-radius:6px; overflow:hidden; margin-top:6px;">
+                        <div id="url-risk-bar" class="risk-bar" style="height:100%; width:0%; background:var(--color-safe);"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <h4 style="margin-top:1rem;">Detected Issues</h4>
+                <ul id="url-issues-list" style="margin:0 0 1rem 1rem;"></ul>
+
+                <h4>Summary</h4>
+                <p id="url-analysis-summary" style="color:var(--text-muted);"></p>
+
+                <div style="margin-top:1rem; color:var(--text-muted);" id="url-scan-time"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Email results reuse the URL results panel (unified layout) -->
+        </div>
+      </div>
+    </section>
+
     <!-- Features Section -->
     <section>
       <div class="container">
@@ -241,9 +287,149 @@
   </footer>
 
   <script src="app.js"></script>
+  
+  <!-- PDF Generation Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  
+  <script src="scanning-system.js"></script>
+  
+  <script>
+    // PDF Download Function for Scan Reports
+    async function waitForScanLibraries() {
+      return new Promise((resolve) => {
+        const checkLibraries = () => {
+          if (typeof html2canvas !== 'undefined' && typeof window.jspdf !== 'undefined') {
+            resolve();
+          } else {
+            setTimeout(checkLibraries, 100);
+          }
+        };
+        checkLibraries();
+      });
+    }
+
+    async function downloadScanReportAsPDF(elementId, fileName, scannerInstance) {
+      try {
+        await waitForScanLibraries();
+        
+        const { jsPDF } = window.jspdf;
+        const element = document.getElementById(elementId);
+
+        if (!element) {
+          console.error("Element not found:", elementId);
+          if (scannerInstance) {
+            scannerInstance.showNotification('Could not find report content', 'error');
+          }
+          return;
+        }
+
+        if (scannerInstance) {
+          scannerInstance.showNotification('Generating PDF...', 'info');
+        }
+
+        // Clone the element to avoid UI shifts
+        const clonedElement = element.cloneNode(true);
+        
+        // Remove download buttons from clone
+        const downloadBtns = clonedElement.querySelectorAll('.download-scan-btn');
+        downloadBtns.forEach(btn => btn.remove());
+        
+        // Get original element dimensions
+        const originalWidth = element.offsetWidth;
+        
+        // Position clone off-screen with same dimensions
+        clonedElement.style.position = 'absolute';
+        clonedElement.style.left = '-9999px';
+        clonedElement.style.top = '0';
+        clonedElement.style.width = originalWidth + 'px';
+        clonedElement.style.height = 'auto';
+        clonedElement.style.visibility = 'hidden';
+        clonedElement.style.pointerEvents = 'none';
+        document.body.appendChild(clonedElement);
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Generate canvas from cloned element
+        const canvas = await html2canvas(clonedElement, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#0b0b0b',
+          logging: false,
+          windowWidth: clonedElement.scrollWidth,
+          windowHeight: clonedElement.scrollHeight
+        });
+
+        // Remove cloned element
+        document.body.removeChild(clonedElement);
+
+        // Create PDF
+        const imgData = canvas.toDataURL("image/png");
+        const pdf = new jsPDF("p", "mm", "a4");
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = pdfWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        // Add first page
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+
+        // Add additional pages if needed
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+          heightLeft -= pdfHeight;
+        }
+
+        // Save PDF
+        pdf.save(fileName);
+
+        if (scannerInstance) {
+          scannerInstance.showNotification('PDF downloaded successfully!', 'success');
+        }
+      } catch (error) {
+        console.error('PDF generation error:', error);
+        if (scannerInstance) {
+          scannerInstance.showNotification('Failed to generate PDF', 'error');
+        }
+      }
+    }
+
+    // Make function globally available
+    window.downloadScanReportAsPDF = downloadScanReportAsPDF;
+
+    // Setup download button listeners - using setTimeout to ensure it doesn't block page load
+    setTimeout(function() {
+      // Use event delegation for dynamically added buttons
+      document.body.addEventListener('click', function(e) {
+        const downloadBtn = e.target.closest('.download-scan-btn');
+        if (downloadBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Get the scanner instance
+          if (window.scanner && window.scanner.currentScan) {
+            window.scanner.exportReport();
+          }
+        }
+      });
+    }, 100);
+  </script>
 
   <!-- PhishNet Chatbot Widget -->
   <div id="chatbot-container">
+    <!-- Greeting Message Bubble -->
+    <div id="chatbot-greeting" class="chatbot-greeting-bubble">
+      <p>Hi, I'm your AI Assistant 👋</p>
+      <p>How may I help you today?</p>
+    </div>
+    
     <!-- Floating Chat Icon -->
     <button id="chatbot-toggle" class="chatbot-icon" aria-label="Open Chatbot">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

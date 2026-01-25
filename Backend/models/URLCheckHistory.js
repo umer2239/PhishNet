@@ -19,6 +19,21 @@ const urlCheckHistorySchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
     },
+    // For email scans store sender email separately
+    senderEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      index: true,
+      default: null,
+    },
+    // Scan type: url or email
+    scanType: {
+      type: String,
+      enum: ['url', 'email'],
+      default: 'url',
+      index: true,
+    },
     domain: {
       type: String,
       required: true,
@@ -41,6 +56,28 @@ const urlCheckHistorySchema = new mongoose.Schema(
       type: String,
       enum: ['safe', 'low', 'medium', 'high', 'critical'],
       default: 'safe',
+    },
+
+    // Additional analysis fields for detailed reports
+    indicators: {
+      type: [String],
+      default: [],
+    },
+    issues: {
+      type: [String],
+      default: [],
+    },
+    summary: {
+      type: String,
+      default: '',
+    },
+    riskLevel: {
+      type: String,
+      default: null,
+    },
+    riskPercent: {
+      type: Number,
+      default: null,
     },
 
     // Threat details
@@ -95,8 +132,9 @@ const urlCheckHistorySchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
       index: true,
-      // TTL Index: Auto-delete records older than 1 year for data retention
-      expires: 365 * 24 * 60 * 60,
+      // TTL Index: Auto-delete records older than 6 months for data retention
+      // 6 months = 180 days = 180 * 24 * 60 * 60 seconds
+      expires: 180 * 24 * 60 * 60,
     },
   },
   {

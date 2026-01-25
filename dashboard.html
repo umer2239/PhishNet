@@ -20,15 +20,22 @@
   <style>
     .dashboard-layout {
       display: grid;
-      grid-template-columns: 320px 1fr;
+      grid-template-columns: minmax(280px, 1fr) 3fr;
       gap: 2rem;
       margin-top: 2rem;
+    }
+
+    .dashboard-layout > div,
+    .dashboard-layout .card {
+      min-width: 0;
     }
     
     table {
       width: 100%;
       border-collapse: collapse;
       font-size: 0.9375rem;
+      table-layout: auto;
+      min-width: auto;
     }
     
     table thead {
@@ -169,7 +176,7 @@
           <!-- Left Sidebar -->
           <div>
             <!-- Recent Alerts -->
-            <div class="recent-alerts-container" style="margin-bottom: 2rem;">
+            <div class="recent-alerts-container" id="recent-alerts-list" style="margin-bottom: 2rem;">
               <div class="recent-alerts-header">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0B63D9" stroke-width="2">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -177,7 +184,7 @@
                 </svg>
                 <h3>Recent Alerts</h3>
               </div>
-              <div>
+              <div id="alerts-content">
                 <div class="alert-item-enhanced">
                   <div class="alert-item-header">
                     <div class="alert-icon">
@@ -232,22 +239,28 @@
               </div>
             </div>
 
-            <!-- Quick Scan -->
-            <div class="card">
+            <!-- Security Tips & Recommendations (replaces Quick Scan) -->
+            <div class="card" id="security-tips-card" style="padding: 1rem;">
               <div class="card-header">
-                <h3 class="card-title">Quick Scan</h3>
+                <h3 class="card-title">Security Tips &amp; Recommendations</h3>
               </div>
-              <form style="padding-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
-                <input type="url" class="form-input" placeholder="Enter URL to scan" style="margin-bottom: 0;">
-                <button type="submit" class="btn btn-primary" style="width: 100%;">Scan Now</button>
-              </form>
+              <div id="security-tips-list" style="padding: 0.75rem 0; display: flex; flex-direction: column; gap: 0.75rem;">
+                <!-- Tips rendered by dashboard-security-tips.js -->
+                <div style="color: #AAAAAA; font-size: 0.95rem;">Loading security tips…</div>
+              </div>
+
+              <div style="display:flex; gap:0.5rem; margin-top: 0.75rem; flex-wrap:wrap;">
+                <div style="flex:1 1 100%; min-width:120px;">
+                  <button id="learn-security-btn" class="btn btn-secondary" style="width:100%;">Learn about Security</button>
+                </div>
+              </div>
             </div>
           </div>
 
           <!-- Main Content -->
           <div>
             <!-- Threat Overview Chart -->
-            <div class="card" style="margin-bottom: 2rem;">
+            <div class="card animate-fade-in" style="margin-bottom: 2rem;">
               <div class="card-header">
                 <h3 class="card-title">Threat Overview (Last 7 Days)</h3>
               </div>
@@ -264,12 +277,12 @@
             </div>
 
             <!-- Recent Scans Table -->
-            <div class="card">
+            <div class="card animate-fade-in" style="animation-delay: 0.1s;">
               <div class="card-header">
                 <h3 class="card-title">Recent Scans</h3>
               </div>
-              <div style="padding-top: 1rem; overflow-x: auto; -webkit-overflow-scrolling: touch;" class="recent-scans-table">
-                <table>
+              <div class="table-container">
+                <table id="scan-results-table">
                   <thead>
                     <tr>
                       <th>Target</th>
@@ -281,46 +294,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>security@paypa1-verify.com</td>
-                      <td>Email</td>
-                      <td><span class="badge badge-malicious">Malicious</span></td>
-                      <td style="font-weight: 600;">95%</td>
-                      <td style="color: var(--text-muted); font-size: 0.875rem;">2h ago</td>
-                      <td><a href="reports.html" class="btn btn-ghost btn-sm">View</a></td>
-                    </tr>
-                    <tr>
-                      <td>https://google.com</td>
-                      <td>URL</td>
-                      <td><span class="badge badge-safe">Safe</span></td>
-                      <td style="font-weight: 600;">98%</td>
-                      <td style="color: var(--text-muted); font-size: 0.875rem;">3h ago</td>
-                      <td><a href="reports.html" class="btn btn-ghost btn-sm">View</a></td>
-                    </tr>
-                    <tr>
-                      <td>https://secure-banking-login.tk</td>
-                      <td>URL</td>
-                      <td><span class="badge badge-suspicious">Suspicious</span></td>
-                      <td style="font-weight: 600;">78%</td>
-                      <td style="color: var(--text-muted); font-size: 0.875rem;">5h ago</td>
-                      <td><a href="reports.html" class="btn btn-ghost btn-sm">View</a></td>
-                    </tr>
-                    <tr>
-                      <td>update@amaz0n-account.ru</td>
-                      <td>Email</td>
-                      <td><span class="badge badge-malicious">Malicious</span></td>
-                      <td style="font-weight: 600;">92%</td>
-                      <td style="color: var(--text-muted); font-size: 0.875rem;">1d ago</td>
-                      <td><a href="reports.html" class="btn btn-ghost btn-sm">View</a></td>
-                    </tr>
-                    <tr>
-                      <td>https://github.com</td>
-                      <td>URL</td>
-                      <td><span class="badge badge-safe">Safe</span></td>
-                      <td style="font-weight: 600;">99%</td>
-                      <td style="color: var(--text-muted); font-size: 0.875rem;">1d ago</td>
-                      <td><a href="reports.html" class="btn btn-ghost btn-sm">View</a></td>
-                    </tr>
+                    <!-- Rows inserted dynamically -->
                   </tbody>
                 </table>
               </div>
@@ -380,9 +354,17 @@
 
   <script src="app.js"></script>
   <script src="chart-init.js"></script>
+  <script src="scanning-system.js"></script>
+  <script src="dashboard-security-tips.js"></script>
 
   <!-- PhishNet Chatbot Widget -->
   <div id="chatbot-container">
+    <!-- Greeting Message Bubble -->
+    <div id="chatbot-greeting" class="chatbot-greeting-bubble">
+      <p>Hi, I'm your AI Assistant 👋</p>
+      <p>How may I help you today?</p>
+    </div>
+    
     <button id="chatbot-toggle" class="chatbot-icon" aria-label="Open Chatbot">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -433,6 +415,7 @@
     </div>
   </div>
   <link rel="stylesheet" href="chatbot.css">
+  
   <script src="chatbot.js"></script>
 </body>
 </html>

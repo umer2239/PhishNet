@@ -5,7 +5,6 @@ const avatarFile = document.getElementById('avatarFile');
 const avatarUploadBtn = document.getElementById('avatarUploadBtn');
 const avatarRemoveBtn = document.getElementById('avatarRemoveBtn');
 const settingsAvatarPreview = document.getElementById('settingsAvatarPreview');
-const avatarFitMode = document.getElementById('avatarFitMode');
 const avatarUploadStatus = document.getElementById('avatarUploadStatus');
 
 let currentAvatarURL = null;
@@ -26,8 +25,8 @@ function debounce(func, wait) {
   };
 }
 
-// Compress image to reduce file size (200x200px max, high quality)
-async function compressImage(dataUrl, maxSize = 50 * 1024) {
+// Compress image to reduce file size (200x200px max, high quality for avatars)
+async function compressImage(dataUrl, maxSize = 500 * 1024) { // Increased to 500KB for much better quality
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -52,15 +51,39 @@ async function compressImage(dataUrl, maxSize = 50 * 1024) {
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
+
+      // Enable highest quality image rendering
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
       ctx.drawImage(img, 0, 0, width, height);
 
-      // Try multiple quality levels to stay under maxSize
-      let quality = 0.9;
-      let result = canvas.toDataURL('image/jpeg', quality);
+      // Try PNG first for lossless quality (avatars are small, so file size should be fine)
+      let result;
+      try {
+        result = canvas.toDataURL('image/png');
+        if (result.length <= maxSize) {
+          resolve(result);
+          return;
+        }
 
-      while (result.length > maxSize && quality > 0.1) {
-        quality -= 0.1;
+        // If PNG is too large, use very high quality JPEG
+        result = canvas.toDataURL('image/jpeg', 0.98); // Very high quality
+        if (result.length <= maxSize) {
+          resolve(result);
+          return;
+        }
+
+        // Last resort: reduce quality gradually but keep it high
+        let quality = 0.95;
         result = canvas.toDataURL('image/jpeg', quality);
+        while (result.length > maxSize && quality > 0.85) { // Minimum quality of 0.85
+          quality -= 0.02;
+          result = canvas.toDataURL('image/jpeg', quality);
+        }
+      } catch (e) {
+        // Fallback to very high quality JPEG
+        result = canvas.toDataURL('image/jpeg', 0.95);
       }
 
       resolve(result);
@@ -155,7 +178,7 @@ avatarFile?.addEventListener('change', (e) => {
       // Store temporarily for later save
       currentAvatarURL = dataUrl;
       window.currentUserAvatar = dataUrl;
-      const fitMode = avatarFitMode?.value || 'cover';
+      const fitMode = 'cover';
       updateAvatarPreview(currentAvatarURL, fitMode);
       
       // Show preview only message (will be saved when user clicks Save)
@@ -182,9 +205,8 @@ avatarFile?.addEventListener('change', (e) => {
 
 
 // Update avatar preview
-function updateAvatarPreview(imageURL, fitMode = null) {
+function updateAvatarPreview(imageURL, fitMode = 'cover') {
   if (imageURL) {
-    const mode = fitMode || avatarFitMode?.value || 'cover';
     // Add cache-busting timestamp and clear old image first
     settingsAvatarPreview.style.backgroundImage = '';
     // For data URLs, don't add cache-busting (they're self-contained)
@@ -194,9 +216,9 @@ function updateAvatarPreview(imageURL, fitMode = null) {
       const cacheId = new Date().getTime();
       urlToUse = imageURL.includes('?') ? `${imageURL}&t=${cacheId}` : `${imageURL}?t=${cacheId}`;
     }
-    console.log('Setting avatar preview:', { imageURL: imageURL.substring(0, 50), mode });
+    console.log('Setting avatar preview:', { imageURL: imageURL.substring(0, 50), fitMode });
     settingsAvatarPreview.style.backgroundImage = `url(${urlToUse})`;
-    settingsAvatarPreview.style.setProperty('background-size', mode, 'important');
+    settingsAvatarPreview.style.setProperty('background-size', fitMode, 'important');
     settingsAvatarPreview.style.backgroundPosition = 'center';
     settingsAvatarPreview.style.backgroundRepeat = 'no-repeat';
     settingsAvatarPreview.textContent = '';
@@ -252,30 +274,6 @@ function updateHeaderAvatar(imageURL, fitMode) {
     headerAvatar.textContent = initials;
   }
 }
-
-// Avatar fit mode change - debounced to prevent rapid API calls
-const saveFitMode = debounce(async (fitMode) => {
-  try {
-    await authFetch(`${apiBase}/users/profile/avatar`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fitMode: fitMode }),
-    });
-  } catch (err) {
-    console.error('Error saving avatar fit mode:', err);
-  }
-}, 500);
-
-avatarFitMode?.addEventListener('change', async () => {
-  if (currentAvatarURL) {
-    const fitMode = avatarFitMode.value;
-    updateAvatarPreview(currentAvatarURL, fitMode);
-    updateHeaderAvatar(currentAvatarURL, fitMode);
-    
-    // Save the fit mode to backend with debouncing
-    saveFitMode(fitMode);
-  }
-});
 
 // Remove avatar
 avatarRemoveBtn?.addEventListener('click', async () => {
@@ -419,15 +417,11 @@ function applyProfileToFormImmediate(user = {}) {
   const emailEl = document.getElementById('email');
 
   if (user.avatar) {
-    const fitMode = user.avatarFit || 'cover';
+    const fitMode = 'cover';
     currentAvatarURL = user.avatar;
     window.currentUserAvatar = user.avatar;
     console.log('Avatar loaded:', { hasAvatar: !!user.avatar, avatarLength: user.avatar?.length });
     
-    // Set dropdown value FIRST
-    if (avatarFitMode) {
-      avatarFitMode.value = fitMode;
-    }
     // Then update preview with the correct fitMode
     updateAvatarPreview(user.avatar, fitMode);
     updateHeaderAvatar(user.avatar, fitMode);
@@ -630,7 +624,7 @@ profileForm?.addEventListener('submit', async (e) => {
       const avatarResult = await authFetch(`${apiBase}/users/profile/avatar`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ avatar: currentAvatarURL, fitMode: avatarFitMode?.value || 'cover' }),
+        body: JSON.stringify({ avatar: currentAvatarURL, fitMode: 'cover' }),
       });
 
       console.log('Avatar save response:', {
@@ -650,9 +644,15 @@ profileForm?.addEventListener('submit', async (e) => {
           window.currentUserAvatar = avatarResult.data.user.avatar;
           console.log('window.currentUserAvatar updated after save');
         }
+
+        // Update the settings page avatar preview with the saved avatar
+        updateAvatarPreview(avatarResult.data.user.avatar, 'cover');
+        
+        // Update currentAvatarURL to match the saved avatar
+        currentAvatarURL = avatarResult.data.user.avatar;
       }
 
-      updateHeaderAvatar(currentAvatarURL, avatarFitMode?.value || 'cover');
+      updateHeaderAvatar(currentAvatarURL, 'cover');
       
       // Refresh chatbot avatar if chatbot instance exists
       if (window.phishnetChatbot && typeof window.phishnetChatbot.refreshUserAvatarsInMessages === 'function') {
