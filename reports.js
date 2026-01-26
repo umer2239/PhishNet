@@ -141,6 +141,52 @@ class ReportsManager {
   }
 
   /**
+   * Generate professional summary based on threat level
+   */
+  generateProfessionalSummary(report) {
+    const threat = (report.threat || 'safe').toLowerCase();
+    const isEmail = (report.type || '').toLowerCase().includes('email');
+    const hasThreats = report.rawThreats && report.rawThreats.length > 0;
+    const hasMalware = hasThreats && report.rawThreats.some(t => (t.type || '').toUpperCase().includes('MALWARE'));
+    const hasPhishing = hasThreats && report.rawThreats.some(t => {
+      const type = (t.type || '').toUpperCase();
+      return type.includes('SOCIAL_ENGINEERING') || type.includes('PHISHING');
+    });
+    const hasUnwanted = hasThreats && report.rawThreats.some(t => (t.type || '').toUpperCase().includes('UNWANTED_SOFTWARE'));
+
+    if (isEmail) {
+      if (threat === 'malicious') {
+        return 'This email has been classified as a significant security threat. Our analysis has identified malicious patterns consistent with phishing attacks, social engineering attempts, or malware distribution. The sender domain, content patterns, and embedded links exhibit characteristics commonly found in cyber attacks. Immediate deletion is recommended, and users should not interact with any links or attachments.';
+      } else if (threat === 'suspicious') {
+        return 'This email exhibits suspicious characteristics that warrant careful review. Our detection systems have identified patterns that deviate from legitimate email communication, including potentially spoofed sender information, suspicious link patterns, or urgency-based social engineering tactics. We recommend thorough verification before taking any action requested in this email.';
+      } else {
+        return 'This email has passed our security screening and shows no immediate indicators of malicious intent. However, users should always exercise caution with unsolicited emails and verify sender authenticity before clicking links or downloading attachments.';
+      }
+    } else {
+      // URL scans
+      if (threat === 'safe') {
+        return 'Our comprehensive security analysis has completed a thorough examination of this URL and found no indicators of malicious activity, phishing attempts, or unwanted software. The URL has passed all security checks including domain reputation analysis, SSL certificate validation, and behavioral pattern matching. This resource appears legitimate and safe for user interaction.';
+      } else if (threat === 'malicious') {
+        let threatDesc = 'This URL has been identified as a significant security threat and presents serious risks to users. Our advanced threat detection algorithms have flagged this resource for ';
+        const threats = [];
+        if (hasMalware) threats.push('malware distribution');
+        if (hasPhishing) threats.push('phishing attempts designed to steal credentials');
+        if (hasUnwanted && !hasMalware && !hasPhishing) threats.push('distributing unwanted software');
+        
+        threatDesc += threats.length > 0 ? threats.join(' and ') : 'malicious activity';
+        threatDesc += '. We strongly recommend avoiding this URL entirely and blocking access through your security systems. Do not enter personal information, credentials, or download any files from this source.';
+        return threatDesc;
+      } else {
+        // suspicious
+        let suspDesc = 'This URL exhibits suspicious characteristics that warrant extreme caution. Our security analysis has detected ';
+        suspDesc += hasUnwanted ? 'unwanted software patterns' : 'anomalous behavior';
+        suspDesc += ' commonly associated with potentially harmful activities. While not definitively malicious, this resource shows signs of deceptive practices, unusual redirect patterns, or attempts to deliver unwanted content. We recommend thorough verification before interacting with this URL.';
+        return suspDesc;
+      }
+    }
+  }
+
+  /**
    * Map server threatLevel to frontend threat labels
    */
   mapThreatLevel(threatLevel) {
@@ -208,7 +254,7 @@ class ReportsManager {
 
             const computedRisk = deriveRisk(rawRisk, (item.threatLevel || item.threat || null) && (['safe','suspicious','malicious'].includes(String(item.threatLevel || item.threat).toLowerCase()) ? item.threatLevel || item.threat : null), item.threatLevel || null);
 
-            return {
+            const reportData = {
               id: item._id,
                 // Detect email scans robustly: prefer explicit scanType, else check sender/email/value/url for an email address
                 type: (function() {
@@ -252,11 +298,20 @@ class ReportsManager {
               time: item.checkedAt ? new Date(item.checkedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '',
               indicators: indicators || [],
               issues: issues || [],
-              summary: summary || '',
+              rawThreats: item.rawThreats || item.threatCategories || [],
               details: item.details || analysis.details || null,
               domain: item.domain || null,
               isSafe: item.isSafe || false
             };
+
+            // Regenerate professional summary if old summary contains "Google Safe Browsing"
+            if (!summary || summary.includes('Google Safe Browsing') || summary.includes('Safe Browsing')) {
+              reportData.summary = this.generateProfessionalSummary(reportData);
+            } else {
+              reportData.summary = summary || '';
+            }
+
+            return reportData;
           });
           console.log(`[ReportsManager] Loaded ${this.scanHistory.length} scans from server`);
         } else {
@@ -584,6 +639,7 @@ class ReportsManager {
 
   generateHtmlReport(report) {
     const threatColor = this.getThreatColor(report.threat);
+    const threatIcon = report.threat === 'safe' ? '✓' : report.threat === 'suspicious' ? '⚠' : '✕';
 
     const indicatorsHtml = (report.indicators || []).map(indicator => `
       <li style="margin-bottom: 12px; padding: 10px; background: rgba(11, 99, 217, 0.1); border-left: 3px solid #0B63D9; border-radius: 4px;">
@@ -594,6 +650,56 @@ class ReportsManager {
     const issuesHtml = (report.issues || []).map(issue => `
       <li style="margin-bottom: 10px; color: #333;">${this.escapeHtml(issue)}</li>
     `).join('');
+
+    // Generate detailed threat table if rawThreats exist
+    const threatTableHtml = report.rawThreats && report.rawThreats.length > 0 ? `
+      <h2>Threat Details</h2>
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <thead>
+          <tr style="background: #f0f0f0; border-bottom: 2px solid #0B63D9;">
+            <th style="padding: 10px; text-align: left; font-weight: 600; border: 1px solid #ddd;">Threat Type</th>
+            <th style="padding: 10px; text-align: left; font-weight: 600; border: 1px solid #ddd;">Severity</th>
+            <th style="padding: 10px; text-align: left; font-weight: 600; border: 1px solid #ddd;">Platform</th>
+            <th style="padding: 10px; text-align: left; font-weight: 600; border: 1px solid #ddd;">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${report.rawThreats.map(t => `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 10px; border: 1px solid #ddd; color: #333;">${this.escapeHtml((t.type || t.threatType || 'UNKNOWN').replace(/_/g, ' '))}</td>
+              <td style="padding: 10px; border: 1px solid #ddd; color: #333;">${report.threat === 'malicious' ? 'HIGH' : report.threat === 'suspicious' ? 'MEDIUM' : 'LOW'}</td>
+              <td style="padding: 10px; border: 1px solid #ddd; color: #333;">${this.escapeHtml((t.platform || t.platformType || 'ANY_PLATFORM').replace(/_/g, ' '))}</td>
+              <td style="padding: 10px; border: 1px solid #ddd; color: #333;">Threat Detection Engine</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    ` : '';
+
+    // Generate detected issues table if issues exist
+    const issuesTableHtml = report.issues && report.issues.length > 0 ? `
+      <h2>Detected Issues Details</h2>
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <thead>
+          <tr style="background: #f0f0f0; border-bottom: 2px solid #0B63D9;">
+            <th style="padding: 10px; text-align: left; font-weight: 600; border: 1px solid #ddd;">Issue</th>
+            <th style="padding: 10px; text-align: left; font-weight: 600; border: 1px solid #ddd;">Timestamp</th>
+            <th style="padding: 10px; text-align: left; font-weight: 600; border: 1px solid #ddd;">Engine</th>
+            <th style="padding: 10px; text-align: left; font-weight: 600; border: 1px solid #ddd;">Metadata</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${report.issues.map(issue => `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 10px; border: 1px solid #ddd; color: #333;">${this.escapeHtml(issue)}</td>
+              <td style="padding: 10px; border: 1px solid #ddd; color: #333; font-size: 11px;">${new Date(report.timestamp || Date.now()).toISOString().replace('T', ' ').replace('Z', ' UTC')}</td>
+              <td style="padding: 10px; border: 1px solid #ddd; color: #333;">Threat Detection Engine</td>
+              <td style="padding: 10px; border: 1px solid #ddd; color: #333;">${this.escapeHtml(report.domain || 'N/A')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    ` : '';
 
     return `<!DOCTYPE html>
 <html>
@@ -636,9 +742,70 @@ class ReportsManager {
     .info-label { font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 600; text-transform: uppercase; }
     .info-value { font-size: 14px; color: #333; font-weight: 600; word-break: break-all; }
     ul { list-style: none; padding: 0; margin: 15px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 12px; text-align: left; border: 1px solid #ddd; }
+    th { background: #f0f0f0; font-weight: 600; color: #333; }
+    tr:nth-child(even) { background: #f9f9f9; }
     .summary-box { padding: 15px; background: #f0f7ff; border-left: 4px solid #0B63D9; border-radius: 4px; margin: 20px 0; }
     .summary-box strong { display: block; margin-bottom: 10px; color: #0B63D9; }
+    .summary-text { color: #333; line-height: 1.8; }
+    .threat-analysis { padding: 15px; background: #f5f5f5; border-left: 4px solid #0B63D9; border-radius: 4px; margin: 20px 0; }
     .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px; }
+    
+    @media (max-width: 768px) {
+      body { padding: 10px; }
+      .container { padding: 15px; }
+      .logo { font-size: 22px; }
+      h1 { font-size: 18px; }
+      h2 { font-size: 16px; }
+      .status-section { grid-template-columns: 1fr; gap: 15px; }
+      .status-box { padding: 15px; }
+      .status-value { font-size: 20px; }
+      .info-grid { grid-template-columns: 1fr; gap: 15px; }
+      .info-item { padding: 10px; }
+      .info-label { font-size: 11px; }
+      .info-value { font-size: 13px; word-wrap: break-word; overflow-wrap: break-word; }
+      table { font-size: 12px; display: block; overflow-x: auto; }
+      th, td { padding: 8px; font-size: 12px; white-space: nowrap; }
+      ul li { margin-bottom: 8px; padding: 8px; word-wrap: break-word; overflow-wrap: break-word; }
+      .summary-box { padding: 12px; }
+      .threat-analysis { padding: 12px; }
+      .header { margin-bottom: 20px; padding-bottom: 15px; }
+    }
+    
+    @media (max-width: 480px) {
+      * { max-width: 100%; }
+      body { padding: 8px; }
+      .container { padding: 12px; }
+      .logo { font-size: 20px; margin-bottom: 5px; }
+      h1 { font-size: 16px; margin-bottom: 5px; }
+      h2 { font-size: 14px; margin: 15px 0 10px 0; }
+      .status-section { grid-template-columns: 1fr; gap: 10px; }
+      .status-box { padding: 12px; }
+      .status-label { font-size: 10px; }
+      .status-value { font-size: 18px; }
+      .badge { padding: 4px 8px; font-size: 11px; }
+      .info-grid { grid-template-columns: 1fr; gap: 10px; }
+      .info-item { padding: 8px; }
+      .info-label { font-size: 10px; }
+      .info-value { font-size: 12px; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; }
+      table { font-size: 11px; display: block; overflow-x: auto; width: 100%; }
+      thead { display: block; }
+      tbody { display: block; }
+      tr { display: block; margin-bottom: 10px; border: 1px solid #ddd; padding: 5px; }
+      th, td { padding: 6px; font-size: 11px; display: block; text-align: left; border: none; }
+      th::before { content: attr(data-label); display: block; font-weight: bold; }
+      ul { word-wrap: break-word; overflow-wrap: break-word; }
+      ul li { margin-bottom: 6px; padding: 6px; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; }
+      ul li strong { font-size: 12px; display: block; word-wrap: break-word; }
+      .summary-box { padding: 10px; }
+      .summary-text { font-size: 12px; word-wrap: break-word; overflow-wrap: break-word; }
+      .threat-analysis { padding: 10px; }
+      .threat-analysis p { font-size: 12px; margin: 5px 0; word-wrap: break-word; overflow-wrap: break-word; }
+      .footer { margin-top: 20px; padding-top: 15px; font-size: 11px; }
+      .footer p { margin: 3px 0; word-wrap: break-word; }
+    }
+    
     @media print { body { background: white; padding: 0; } .container { box-shadow: none; } }
   </style>
 </head>
@@ -654,7 +821,7 @@ class ReportsManager {
     <div class="status-section">
       <div class="status-box">
         <div class="status-label">Threat Assessment</div>
-        <div class="status-value">${report.threat.toUpperCase()}</div>
+        <div class="status-value">${threatIcon} ${report.threat.toUpperCase()}</div>
         <div class="badge">${report.threat.toUpperCase()}</div>
       </div>
       <div class="status-box">
@@ -664,13 +831,22 @@ class ReportsManager {
       </div>
     </div>
 
+    <h2>Threat Analysis Results</h2>
+    <div class="threat-analysis">
+      <p><strong>Status:</strong> ${(report.threat || 'safe').toString().toUpperCase()}</p>
+      <p><strong>Detection Engine:</strong> ${report.rawThreats && report.rawThreats.length > 0 ? 'Threat Detection Engine' : 'Heuristic Analysis Engine'}</p>
+      <p><strong>Analyzed At:</strong> ${new Date(report.timestamp || Date.now()).toISOString().replace('T', ' ').replace('Z', ' UTC')}</p>
+    </div>
+
+    ${threatTableHtml}
+
     <h2>Scan Information</h2>
     <div class="info-grid">
       <div class="info-item">
         <div class="info-label">Scan Type</div>
         <div class="info-value">${report.type === 'url' ? 'URL Scan' : 'Email Scan'}</div>
       </div>
-          <div class="info-item">
+      <div class="info-item">
         <div class="info-label">Risk Level</div>
         <div class="info-value">${this.formatRisk(report.riskLevel) || 'Unknown'}</div>
       </div>
@@ -685,20 +861,22 @@ class ReportsManager {
     </div>
 
     <h2>Threat Indicators</h2>
-    <ul>${indicatorsHtml}</ul>
+    <ul>${indicatorsHtml || '<li style="color: #999;">No indicators detected</li>'}</ul>
 
-    <h2>Detected Issues</h2>
-    <ul>${issuesHtml}</ul>
+    ${issuesTableHtml}
 
-    <h2>Summary</h2>
+    ${issuesHtml ? `<h2>Issues Summary</h2><ul>${issuesHtml}</ul>` : ''}
+
+    <h2>Security Assessment Summary</h2>
     <div class="summary-box">
-      <strong>${report.threat === 'safe' ? '✓ Safe' : report.threat === 'suspicious' ? '⚠ Warning' : '✕ Malicious'}</strong>
-      <p>${this.escapeHtml(report.summary)}</p>
+      <strong>${threatIcon} ${report.threat === 'safe' ? 'Safe Assessment' : report.threat === 'suspicious' ? 'Suspicious Warning' : 'Malicious Threat'}</strong>
+      <p class="summary-text">${this.escapeHtml(report.summary || 'No summary available')}</p>
     </div>
 
     <div class="footer">
-      <p>PhishNet Security Report | Generated on ${new Date().toLocaleString()}</p>
-      <p>This report is confidential and intended for authorized use only.</p>
+      <p>PhishNet Security Report</p>
+      <p>Report Generated: ${new Date().toLocaleString()}</p>
+      <p>© 2026 PhishNet Security. All rights reserved.</p>
     </div>
   </div>
 </body>

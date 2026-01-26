@@ -156,6 +156,17 @@
       font-weight: 600;
     }
 
+    /* Filter card spacing */
+    .filter-card {
+      margin-top: 2rem;
+    }
+
+    @media (max-width: 768px) {
+      .filter-card {
+        margin-top: 3rem;
+      }
+    }
+
     .results-card {
       position: relative;
     }
@@ -658,6 +669,209 @@
         word-wrap: break-word;
         overflow-wrap: break-word;
       }
+      
+      /* Sidebar fixes for mobile */
+      .report-layout > div:last-child {
+        width: 100%;
+        max-width: 100%;
+        padding: 0 !important;
+        overflow-x: hidden !important;
+      }
+      
+      .card {
+        width: 100%;
+        max-width: 100%;
+        margin: 0 !important;
+        overflow: hidden !important;
+        padding: 1rem !important;
+        box-sizing: border-box !important;
+      }
+      
+      .filter-card-header,
+      .filter-card-body {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+      
+      .recent-scans-container {
+        width: 100%;
+        overflow: hidden !important;
+      }
+      
+      .scan-preview {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+      }
+      
+      .scan-preview-value {
+        max-width: calc(100% - 1rem) !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        white-space: normal !important;
+      }
+      
+      #report-filter-select {
+        width: calc(100% - 0.5rem) !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+      }
+      
+      .btn-filter {
+        width: calc(100% - 0.5rem) !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      html, body {
+        overflow-x: hidden !important;
+        width: 100% !important;
+      }
+      
+      .container {
+        overflow-x: hidden !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0.75rem !important;
+        margin: 0 auto !important;
+      }
+      
+      .report-layout {
+        gap: 0.75rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        overflow-x: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+      }
+      
+      .report-layout > * {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+        margin: 0 auto !important;
+        padding: 0.75rem !important;
+      }
+      
+      .report-layout > div:last-child {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0.75rem !important;
+        margin: 0 auto !important;
+        overflow-x: hidden !important;
+      }
+      
+      #main-report {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 auto !important;
+      }
+      
+      .card {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 auto !important;
+        padding: 1rem !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+      }
+      
+      .card h3 {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        max-width: 100% !important;
+        text-align: center !important;
+      }
+      
+      .recent-scans-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: hidden !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+      }
+      
+      .scan-preview {
+        width: 100% !important;
+        max-width: 90% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        padding: 0.75rem !important;
+        margin: 0.5rem auto !important;
+      }
+      
+      .scan-preview-title {
+        max-width: 100%;
+        word-wrap: break-word;
+        text-align: center !important;
+      }
+      
+      .scan-preview-value {
+        font-size: 0.75rem !important;
+        max-width: 100% !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        white-space: normal !important;
+        margin: 0.25rem 0 !important;
+        padding: 0 !important;
+        text-align: center !important;
+      }
+      
+      .scan-preview-status {
+        font-size: 0.65rem !important;
+        padding: 0.3rem 0.5rem !important;
+        margin: 0.25rem auto 0 !important;
+        display: inline-block !important;
+      }
+      
+      .filter-card-body {
+        padding: 1rem !important;
+        overflow: hidden !important;
+        margin: 0 auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+      }
+      
+      .filter-card-header {
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        text-align: center !important;
+      }
+      
+      #report-filter-select {
+        width: 90% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        margin: 0.5rem auto !important;
+        padding: 0.75rem !important;
+        font-size: 0.875rem !important;
+        display: block !important;
+      }
+      
+      .btn-filter {
+        width: 90% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        margin: 0.75rem auto 0 !important;
+        padding: 0.75rem !important;
+        display: block !important;
+      }
     }
   </style>
 </head>
@@ -711,7 +925,7 @@
             </div>
 
             <!-- Filter Reports Card -->
-            <div class="card" style="margin-top: 1rem;">
+            <div class="card filter-card">
               <div class="card-header">
                 <h3 class="card-title">Filter Reports</h3>
               </div>

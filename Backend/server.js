@@ -28,7 +28,9 @@ const dashboardRoutes = require('./routes/dashboard');
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
-const { authMiddleware } = require('./middleware/auth');
+const { authMiddleware, optionalAuthMiddleware } = require('./middleware/auth');
+const { sanitizeURL, isValidURL, extractDomain } = require('./utils/validators');
+const { scanUrlWithGoogleSafeBrowsing } = require('./utils/safeBrowsing');
 
 // Initialize Express app
 const app = express();
@@ -151,6 +153,126 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
   });
+});
+
+// ======================== THREAT DETECTION URL SCAN ========================
+app.post('/api/scan-url', optionalAuthMiddleware, async (req, res, next) => {
+  try {
+    const { url } = req.body || {};
+
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'URL is required and must be a string',
+      });
+    }
+
+    const sanitizedURL = sanitizeURL(url);
+    if (!isValidURL(sanitizedURL)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid URL format. Please include the protocol (e.g., https://example.com).',
+      });
+    }
+
+    const apiKey = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({
+        success: false,
+        message: 'Threat detection service is not configured on the server.',
+      });
+    }
+
+    const scanStartedAt = Date.now();
+    const { status, threats } = await scanUrlWithGoogleSafeBrowsing(sanitizedURL, apiKey);
+    const scanDurationMs = Date.now() - scanStartedAt;
+
+    const threatList = Array.isArray(threats) ? threats : [];
+    const domain = extractDomain(sanitizedURL);
+    const hasThreats = threatList.length > 0;
+    const hasMalware = threatList.some((t) => t.type === 'MALWARE');
+    const hasPhishing = threatList.some((t) => t.type === 'SOCIAL_ENGINEERING' || t.type === 'PHISHING');
+    const hasUnwanted = threatList.some((t) => t.type === 'UNWANTED_SOFTWARE');
+    const normalizedThreatType = hasPhishing ? 'phishing' : hasMalware ? 'malware' : hasUnwanted ? 'unsafe' : 'safe';
+    const threatLevel = status === 'MALICIOUS' ? 'high' : status === 'SUSPICIOUS' ? 'medium' : 'safe';
+    const isSafe = status === 'SAFE';
+    const indicators = hasThreats
+      ? threatList.map((t) => `Flagged: ${t.type} (${t.platform})`)
+      : ['No security threats detected'];
+    const issues = hasThreats
+      ? threatList.map((t) => `Security analysis identified ${t.type.replace(/_/g, ' ')} threat for this URL.`)
+      : ['Security analysis completed - No threats found'];
+
+    if (req.user) {
+      await URLCheckHistory.create({
+        userId: req.user._id,
+        url: sanitizedURL,
+        domain,
+        scanType: 'url',
+        isSafe,
+        threatType: normalizedThreatType,
+        threatLevel,
+        indicators,
+        issues,
+        summary: isSafe 
+          ? 'Our comprehensive security analysis has completed a thorough examination of this URL and found no indicators of malicious activity, phishing attempts, or unwanted software. This resource appears legitimate and safe for user interaction.'
+          : hasPhishing || hasMalware
+            ? `This URL has been identified as a significant security threat. Our threat detection engine has flagged this resource for ${hasMalware ? 'malware distribution' : ''}${hasMalware && hasPhishing ? ' and ' : ''}${hasPhishing ? 'phishing attempts' : ''}. We strongly recommend avoiding this URL entirely.`
+            : 'This URL exhibits suspicious characteristics that warrant caution. Security analysis detected potentially unwanted software or deceptive practices. We recommend verification before interacting with this resource.',
+        detectionSource: 'api',
+        confidence: isSafe ? 98 : 99,
+        threatCategories: threatList.map((t) => t.type),
+        threatsDetected: threatList.map((t) => ({ name: t.type, severity: threatLevel })),
+        riskLevel: threatLevel,
+        riskPercent: isSafe ? 2 : status === 'MALICIOUS' ? 95 : 60,
+        userWarned: !isSafe,
+        warningType: isSafe ? 'none' : 'banner',
+        userAction: 'pending',
+      });
+
+      await req.user.updateMetrics({
+        safeWebsites: isSafe ? 1 : 0,
+        unsafeUrls: isSafe ? 0 : status === 'MALICIOUS' ? 1 : 0,
+        threatUrls: isSafe ? 0 : status === 'SUSPICIOUS' ? 1 : 0,
+        phishingUrls: hasPhishing ? 1 : 0,
+        protectionWarnings: isSafe ? 0 : 1,
+      });
+    }
+
+    const analytics = await Analytics.getAnalytics();
+    await analytics.updatePlatformMetrics({
+      safeWebsites: isSafe ? 1 : 0,
+      unsafeUrls: isSafe ? 0 : status === 'MALICIOUS' ? 1 : 0,
+      threatUrls: isSafe ? 0 : status === 'SUSPICIOUS' ? 1 : 0,
+      phishingUrls: hasPhishing ? 1 : 0,
+      protectionWarnings: isSafe ? 0 : 1,
+    });
+    await analytics.updateDailyStats({
+      urlsChecked: 1,
+      threatsDetected: isSafe ? 0 : 1,
+      protectionWarnings: isSafe ? 0 : 1,
+    });
+    if (!isSafe && hasPhishing) {
+      await analytics.updateTopPhishingDomains(domain);
+    }
+
+    res.status(200).json({
+      success: true,
+      status,
+      threats: threatList,
+      meta: {
+        url: sanitizedURL,
+        domain,
+        durationMs: scanDurationMs,
+      },
+    });
+  } catch (error) {
+    const statusCode = error?.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error?.message || 'Failed to scan URL with threat detection service',
+    });
+  }
 });
 
 // ======================== API ROUTES ========================

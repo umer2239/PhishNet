@@ -430,6 +430,17 @@
       header h1 {
         font-size: 1.8rem;
       }
+      
+      /* Issues table responsive */
+      .issues-table th,
+      .issues-table td {
+        padding: 0.75rem !important;
+        font-size: 0.8rem !important;
+      }
+      
+      .issues-table th {
+        font-size: 0.75rem !important;
+      }
     }
 
     @media (max-width: 480px) {
@@ -456,6 +467,66 @@
         padding: 4px 6px;
         font-size: 0.7rem;
         margin-right: 3px;
+      }
+      
+      /* Keep table scrollable on mobile instead of card layout */
+      .issues-table-wrapper {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px !important;
+        margin: 0 !important;
+        width: 100% !important;
+      }
+      
+      .issues-table {
+        min-width: 700px !important;
+        width: 700px !important;
+        font-size: 0.7rem !important;
+        display: table !important;
+      }
+      
+      .issues-table thead {
+        display: table-header-group !important;
+      }
+      
+      .issues-table tbody {
+        display: table-row-group !important;
+      }
+      
+      .issues-table tr {
+        display: table-row !important;
+      }
+      
+      .issues-table th,
+      .issues-table td {
+        display: table-cell !important;
+        padding: 0.6rem !important;
+        font-size: 0.7rem !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+      }
+      
+      .issues-table th {
+        font-size: 0.65rem !important;
+        padding: 0.7rem 0.6rem !important;
+      }
+      
+      /* Force column widths on mobile */
+      .issues-table colgroup col:nth-child(1) {
+        width: 250px !important;
+      }
+      
+      .issues-table colgroup col:nth-child(2) {
+        width: 180px !important;
+      }
+      
+      .issues-table colgroup col:nth-child(3) {
+        width: 150px !important;
+      }
+      
+      .issues-table colgroup col:nth-child(4) {
+        width: 120px !important;
       }
     }
   </style>

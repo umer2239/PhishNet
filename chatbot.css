@@ -16,8 +16,8 @@
   position: absolute;
   bottom: 80px;
   right: 0;
-  background: #ffffff;
-  color: #1f2937;
+  background: #1a1a2e;
+  color: #ffffff;
   padding: 14px 20px;
   border-radius: 14px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -42,7 +42,7 @@
   height: 0;
   border-left: 10px solid transparent;
   border-right: 10px solid transparent;
-  border-top: 10px solid #ffffff;
+  border-top: 10px solid #1a1a2e;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.1));
 }
 
@@ -51,7 +51,7 @@
   font-size: 14px;
   line-height: 1.5;
   font-weight: 500;
-  color: #1f2937;
+  color: #ffffff;
   white-space: nowrap;
 }
 

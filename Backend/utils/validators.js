@@ -60,7 +60,7 @@ const sanitizeURL = (url) => {
 };
 
 // Simple phishing detection heuristics (basic implementation)
-// In production, use specialized APIs like Google Safe Browsing API
+// In production, use specialized threat detection APIs
 const checkURLSafety = (url) => {
   const domain = extractDomain(url);
   const lowerUrl = url.toLowerCase();
